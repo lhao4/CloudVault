@@ -1,0 +1,49 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Qt Creator / user-specific files
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qmake.stash
+*.qtc_clangd/
+.qtcreator/
+
+# Build directories
+build*/
+**/build*/
+
+# Generic C/C++ build artifacts
+*.o
+*.obj
+*.lo
+*.la
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.dSYM/
+
+# Qt generated files
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+
+# CMake / compile database artifacts
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+
+# Windows ADS side files (seen in this repo)
+*:Zone.Identifier
