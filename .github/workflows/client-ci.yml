@@ -1,0 +1,54 @@
+name: Client CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "client/**"
+      - "common/**"
+      - ".github/workflows/client-ci.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "client/**"
+      - "common/**"
+      - ".github/workflows/client-ci.yml"
+
+jobs:
+  build:
+    name: Build on Windows (MinGW)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt 6.10.1 (MinGW)
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: "6.10.1"
+          host: "windows"
+          target: "desktop"
+          arch: "win64_mingw"
+          tools: "tools_mingw1310"
+          cache: true
+
+      - name: Add MinGW to PATH
+        shell: pwsh
+        run: |
+          $mingwDir = Get-ChildItem "C:\Qt\Tools" -Filter "mingw*" |
+            Sort-Object Name -Descending |
+            Select-Object -First 1
+          "$($mingwDir.FullName)\bin" |
+            Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install OpenSSL for MinGW (MSYS2)
+        run: C:\msys64\usr\bin\pacman.exe -S --noconfirm mingw-w64-x86_64-openssl
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          cmake -B build -S client -G Ninja `
+            -DOPENSSL_ROOT_DIR="C:/msys64/mingw64"
+
+      - name: Build
+        run: cmake --build build --parallel

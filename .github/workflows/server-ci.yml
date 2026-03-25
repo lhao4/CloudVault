@@ -1,0 +1,39 @@
+name: Server CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "server/**"
+      - "common/**"
+      - ".github/workflows/server-ci.yml"
+  pull_request:
+    branches: [master]
+    paths:
+      - "server/**"
+      - "common/**"
+      - ".github/workflows/server-ci.yml"
+
+jobs:
+  build:
+    name: Build on Ubuntu
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            libspdlog-dev \
+            nlohmann-json3-dev \
+            libssl-dev \
+            libgtest-dev
+
+      - name: Configure
+        run: cmake -B build -S server -G Ninja
+
+      - name: Build
+        run: cmake --build build --parallel
