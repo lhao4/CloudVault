@@ -24,8 +24,10 @@
 - 服务端 `FriendHandler`
 - `SessionManager` 连接反查身份
 - 客户端 `FriendService`
-- 登录后的最小 `MainWindow`
-- 主窗口中的好友页 `FriendPage`
+- 登录后的三栏 `MainWindow`
+- 主界面左栏联系人列表与底部导航
+- 主界面中栏消息 / 文件 / 我的三页壳体
+- 主界面右栏详情面板
 
 当前实现范围：
 
@@ -33,6 +35,8 @@
 - 支持同意好友申请
 - 支持刷新好友列表
 - 支持删除好友
+- 支持登录后进入三栏主界面
+- 左栏好友列表直接联动好友刷新结果
 - 不支持离线好友申请持久化
 - 不支持拒绝好友申请专门回包
 
@@ -43,7 +47,7 @@
 ```text
 A 登录成功
   ↓
-LoginWindow -> MainWindow -> FriendPage
+LoginWindow -> MainWindow（三栏）
   ↓
 FriendService 发送 ADD_FRIEND_REQUEST(B)
   ↓
@@ -55,7 +59,7 @@ FriendHandler 检查：
   ↓
 服务端向 B 推送 FRIEND_REQUEST_PUSH(A)
   ↓
-B 的 FriendPage 弹窗确认
+B 的 MainWindow 弹窗确认
   ↓
 B 发送 AGREE_FRIEND_REQUEST(A)
   ↓
@@ -388,22 +392,37 @@ findByConnection(std::shared_ptr<TcpConnection>)
 第八章中登录成功后，客户端还停留在 `LoginWindow`。  
 本章登录成功后会：
 
-1. 创建最小 `MainWindow`
+1. 创建三栏 `MainWindow`
 2. 隐藏登录窗口
-3. 进入好友页
-4. 自动调用一次 `flushFriends()`
+3. 默认进入“消息”页
+4. 左栏联系人列表由好友刷新结果驱动
+5. 自动调用一次 `flushFriends()`
 
-### 9.6.3 MainWindow
+### 9.6.3 MainWindow（三栏）
 
-[main_window.cpp](/mnt/d/CloudVault/client/src/ui/main_window.cpp) 现在已经承载第九章主界面三栏布局：
+[main_window.cpp](/mnt/d/CloudVault/client/src/ui/main_window.cpp) 已按照主界面设计文档落成三栏结构：
 
-- 左栏显示联系人搜索、好友列表与底部导航
-- 中栏显示消息页 / 文件页 / 我的资料页
-- 右栏显示联系人详情、文件操作区或个人状态
-- 左栏好友列表直接消费 `FriendService::friendsRefreshed` 的结果
-- 选择联系人后会同步更新中栏标题和右栏详情
+- 左栏：`260px`
+  - 标题栏
+  - 联系人搜索框
+  - 联系人列表
+  - 底部导航 `消息 / 文件 / 我`
+- 中栏：主内容区
+  - `消息` 页显示聊天头部、消息流与输入区壳体
+  - `文件` 页显示路径栏、文件列表与工具区壳体
+  - `我` 页显示个人资料卡与退出登录入口
+- 右栏：`220px`
+  - `消息` 页显示联系人详情与共享文件摘要
+  - `文件` 页显示文件操作与上传进度
+  - `我` 页显示个人状态摘要
 
-好友相关交互不再单独放在 `FriendPage` 中，而是已经收敛进 `MainWindow` 这套三栏主界面实现中。
+当前主界面中，好友系统已经真实接入左栏联系人列表：
+
+- `FriendService::friendsRefreshed` 会驱动左栏联系人刷新
+- 选择联系人后会同步更新中栏标题与右栏详情
+- 删除 `FriendPage` 后，不再维护第二套好友界面实现
+
+也就是说，第九章的好友功能已经收敛进 `MainWindow` 这套主界面壳体中，而不是停留在独立的测试页。
 
 ---
 
