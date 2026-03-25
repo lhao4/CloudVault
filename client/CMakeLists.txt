@@ -1,6 +1,6 @@
 # ===========================================================
 # client/CMakeLists.txt
-# 构建客户端可执行文件 cloudhive_client
+# 构建客户端可执行文件 cloudvault_client
 #
 # 平台：Windows（也可在 Linux 上构建用于开发调试）
 # Qt 版本：Qt 6（需通过 Qt 官方安装器安装）
@@ -16,7 +16,7 @@
 # ===========================================================
 
 cmake_minimum_required(VERSION 3.20)
-project(cloudhive_client VERSION 2.0 LANGUAGES CXX)
+project(cloudvault_client VERSION 2.0 LANGUAGES CXX)
 
 # ── C++ 标准 ─────────────────────────────────────────────
 set(CMAKE_CXX_STANDARD 17)
@@ -74,7 +74,7 @@ file(GLOB_RECURSE CLIENT_UI_FILES
 # ── 定义可执行文件 ────────────────────────────────────────
 # WIN32：Windows 平台下以 GUI 模式启动，不弹出黑色控制台窗口。
 #   在 Linux/macOS 下此选项被忽略。
-add_executable(cloudhive_client
+add_executable(cloudvault_client
     WIN32
     ${CLIENT_SOURCES}
     ${CLIENT_RESOURCES}
@@ -85,7 +85,7 @@ add_executable(cloudhive_client
 # CMAKE_CURRENT_BINARY_DIR：当前构建目录（build/）。
 #   AUTOUIC 生成的 ui_*.h 文件放在这里，
 #   必须加入搜索路径，否则 #include "ui_login_window.h" 会找不到文件。
-target_include_directories(cloudhive_client
+target_include_directories(cloudvault_client
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_BINARY_DIR}     # AUTOUIC 生成的 ui_*.h
@@ -94,21 +94,21 @@ target_include_directories(cloudhive_client
 # ── 链接依赖 ─────────────────────────────────────────────
 # Qt6::Widgets：GUI 控件
 # Qt6::Network：QTcpSocket
-# cloudhive_common：共享协议库（会自动传递 OpenSSL::Crypto）
-target_link_libraries(cloudhive_client
+# cloudvault_common：共享协议库（会自动传递 OpenSSL::Crypto）
+target_link_libraries(cloudvault_client
     PRIVATE
         Qt6::Widgets
         Qt6::Network
-        cloudhive_common
+        cloudvault_common
 )
 
 # ── Windows 部署辅助 ──────────────────────────────────────
 # windeployqt：Qt 提供的工具，自动复制运行所需的 Qt DLL 到输出目录。
 # 只在 Windows 下执行，其他平台忽略。
-# 构建完成后在 build/Release/ 目录运行 windeployqt cloudhive_client.exe 即可。
+# 构建完成后在 build/Release/ 目录运行 windeployqt cloudvault_client.exe 即可。
 if(WIN32)
-    add_custom_command(TARGET cloudhive_client POST_BUILD
+    add_custom_command(TARGET cloudvault_client POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E echo
-            "提示：运行 windeployqt $<TARGET_FILE:cloudhive_client> 复制 Qt 依赖 DLL"
+            "提示：运行 windeployqt $<TARGET_FILE:cloudvault_client> 复制 Qt 依赖 DLL"
     )
 endif()

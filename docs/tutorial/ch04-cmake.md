@@ -70,11 +70,11 @@ CloudVault/
 
 ```
 common/src/protocol_codec.cpp  ──┐
-common/src/crypto_utils.cpp    ──┤  编译  →  libcloudhive_common.a
+common/src/crypto_utils.cpp    ──┤  编译  →  libcloudvault_common.a
                                  ┘
 
-server 链接时：cloudhive_server + libcloudhive_common.a → 最终可执行文件
-client 链接时：cloudhive_client + libcloudhive_common.a → 最终可执行文件
+server 链接时：cloudvault_server + libcloudvault_common.a → 最终可执行文件
+client 链接时：cloudvault_client + libcloudvault_common.a → 最终可执行文件
 ```
 
 协议代码只写一份，两端都能用，这就是 common 库的价值。
@@ -102,7 +102,7 @@ common 的头文件用 `PUBLIC`，这样 server 和 client 链接 common 后，
 
 ```cmake
 cmake_minimum_required(VERSION 3.20)
-project(cloudhive_common VERSION 2.0 LANGUAGES CXX)
+project(cloudvault_common VERSION 2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -110,17 +110,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(OpenSSL REQUIRED)
 
-add_library(cloudhive_common STATIC
+add_library(cloudvault_common STATIC
     src/protocol_codec.cpp
     src/crypto_utils.cpp
 )
 
-target_include_directories(cloudhive_common
+target_include_directories(cloudvault_common
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(cloudhive_common
+target_link_libraries(cloudvault_common
     PUBLIC
         OpenSSL::Crypto
 )
@@ -177,7 +177,7 @@ sudo apt install libssl-dev libmysqlclient-dev
 
 ```cmake
 cmake_minimum_required(VERSION 3.20)
-project(cloudhive_server VERSION 2.0 LANGUAGES CXX)
+project(cloudvault_server VERSION 2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -212,16 +212,16 @@ file(GLOB_RECURSE SERVER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
 )
 
-add_executable(cloudhive_server ${SERVER_SOURCES})
+add_executable(cloudvault_server ${SERVER_SOURCES})
 
-target_include_directories(cloudhive_server
+target_include_directories(cloudvault_server
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_link_libraries(cloudhive_server
+target_link_libraries(cloudvault_server
     PRIVATE
-        cloudhive_common
+        cloudvault_common
         spdlog::spdlog
         nlohmann_json::nlohmann_json
         OpenSSL::SSL
@@ -230,7 +230,7 @@ target_link_libraries(cloudhive_server
         Threads::Threads
 )
 
-target_compile_options(cloudhive_server
+target_compile_options(cloudvault_server
     PRIVATE
         $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
 )
@@ -335,7 +335,7 @@ cmake -B build -DQt6_DIR="C:/Qt/6.7.0/msvc2022_64/lib/cmake/Qt6"
 ### WIN32 关键字
 
 ```cmake
-add_executable(cloudhive_client WIN32 ${CLIENT_SOURCES} ...)
+add_executable(cloudvault_client WIN32 ${CLIENT_SOURCES} ...)
 ```
 
 `WIN32` 告诉 Windows 这是一个 GUI 程序，启动时不弹出黑色命令行窗口。

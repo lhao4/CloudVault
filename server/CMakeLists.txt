@@ -1,10 +1,10 @@
 # ===========================================================
 # server/CMakeLists.txt
-# 构建服务端可执行文件 cloudhive_server
+# 构建服务端可执行文件 cloudvault_server
 #
 # 依赖关系：
-#   cloudhive_server
-#     ├── cloudhive_common（共享协议库，本地）
+#   cloudvault_server
+#     ├── cloudvault_common（共享协议库，本地）
 #     ├── spdlog          （日志库，FetchContent 自动下载）
 #     ├── nlohmann/json   （JSON 配置解析，FetchContent 自动下载）
 #     ├── OpenSSL::SSL    （TLS 加密）
@@ -14,7 +14,7 @@
 # ===========================================================
 
 cmake_minimum_required(VERSION 3.20)
-project(cloudhive_server VERSION 2.0 LANGUAGES CXX)
+project(cloudvault_server VERSION 2.0 LANGUAGES CXX)
 
 # ── C++ 标准 ─────────────────────────────────────────────
 set(CMAKE_CXX_STANDARD 17)
@@ -89,22 +89,22 @@ file(GLOB_RECURSE SERVER_SOURCES
 )
 
 # ── 定义可执行文件 target ─────────────────────────────────
-add_executable(cloudhive_server ${SERVER_SOURCES})
+add_executable(cloudvault_server ${SERVER_SOURCES})
 
 # ── 头文件路径 ────────────────────────────────────────────
-# PRIVATE：只有 cloudhive_server 自己编译时才需要这些路径，
+# PRIVATE：只有 cloudvault_server 自己编译时才需要这些路径，
 #   不会传递给其他链接了 server 的 target（server 是最终产物，不会被别人链接）。
-target_include_directories(cloudhive_server
+target_include_directories(cloudvault_server
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 # ── 链接依赖 ─────────────────────────────────────────────
 # 所有依赖写在一起，CMake 会自动处理链接顺序。
-# cloudhive_common 链接后，OpenSSL::Crypto 也会自动传递过来（因为 common 声明为 PUBLIC）。
-target_link_libraries(cloudhive_server
+# cloudvault_common 链接后，OpenSSL::Crypto 也会自动传递过来（因为 common 声明为 PUBLIC）。
+target_link_libraries(cloudvault_server
     PRIVATE
-        cloudhive_common        # 共享协议库
+        cloudvault_common        # 共享协议库
         spdlog::spdlog          # 日志
         nlohmann_json::nlohmann_json  # JSON 解析
         OpenSSL::SSL            # TLS
@@ -119,7 +119,7 @@ target_link_libraries(cloudhive_server
 # -Wextra：开启额外警告
 # -Wpedantic：要求严格符合 C++ 标准
 # 这些在开发阶段很有价值，能提前发现潜在问题。
-target_compile_options(cloudhive_server
+target_compile_options(cloudvault_server
     PRIVATE
         $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
 )

@@ -1,4 +1,4 @@
-# CloudHive 云巢 — 协议与 API 规范
+# CloudVault 云巢 — 协议与 API 规范
 
 > **版本**：PDU v2.0 | **状态**：已确认
 

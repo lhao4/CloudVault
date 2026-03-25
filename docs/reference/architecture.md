@@ -1,4 +1,4 @@
-# CloudHive 云巢 — 系统架构文档
+# CloudVault 云巢 — 系统架构文档
 
 > **版本**：v2.0 | **状态**：已确认
 
@@ -6,7 +6,7 @@
 
 ## 1. 整体架构概览
 
-CloudHive 采用经典 **C/S（客户端/服务端）** 架构，客户端与服务端通过 TCP 长连接通信，共用同一套二进制协议库（`common`）。
+CloudVault 采用经典 **C/S（客户端/服务端）** 架构，客户端与服务端通过 TCP 长连接通信，共用同一套二进制协议库（`common`）。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -415,11 +415,11 @@ CloudVault/
 │   └── CMakeLists.txt          → 静态库 cloudvault_common
 │                                 （两端各自 add_subdirectory 引入）
 ├── server/
-│   └── CMakeLists.txt          → 可执行文件 cloudhive_server
+│   └── CMakeLists.txt          → 可执行文件 cloudvault_server
 │                                 add_subdirectory(../common)
 │                                 add_subdirectory(tests)  [-DBUILD_TESTING=ON]
 └── client/
-    └── CMakeLists.txt          → 可执行文件 cloudhive_client
+    └── CMakeLists.txt          → 可执行文件 cloudvault_client
                                   add_subdirectory(../common)
 ```
 
@@ -458,10 +458,10 @@ cmake --build build --config Release
 ┌─────────────────────────────────────────┐
 │              Linux 服务器                │
 │                                         │
-│  cloudhive_server  ←→  MySQL 8.0        │
-│  监听 :5000 (TLS)       数据库: cloudhive │
+│  cloudvault_server  ←→  MySQL 8.0        │
+│  监听 :5000 (TLS)       数据库: cloudvault │
 │                                         │
-│  文件存储: /data/cloudhive/filesys/       │
+│  文件存储: /data/cloudvault/filesys/       │
 └─────────────────────────────────────────┘
          ↑ TLS TCP
 ┌────────┴────────┐
@@ -477,8 +477,8 @@ services:
     image: mysql:8.0
     volumes: [ "db_data:/var/lib/mysql" ]
     environment:
-      MYSQL_DATABASE: cloudhive
-      MYSQL_USER: cloudhive_app
+      MYSQL_DATABASE: cloudvault
+      MYSQL_USER: cloudvault_app
       MYSQL_PASSWORD_FILE: /run/secrets/db_password
 
   server:
@@ -487,7 +487,7 @@ services:
     depends_on: [ db ]
     volumes:
       - "file_data:/data/filesys"
-      - "./config/server.json:/etc/cloudhive/server.json:ro"
+      - "./config/server.json:/etc/cloudvault/server.json:ro"
     secrets: [ db_password, tls_cert, tls_key ]
 ```
 

@@ -195,10 +195,10 @@ CloudVault/
 
 | Target | 名称 |
 |--------|------|
-| common 静态库 | `cloudhive_common` |
-| server 可执行文件 | `cloudhive_server` |
-| client 可执行文件 | `cloudhive_client` |
-| 测试可执行文件 | `cloudhive_server_tests` |
+| common 静态库 | `cloudvault_common` |
+| server 可执行文件 | `cloudvault_server` |
+| client 可执行文件 | `cloudvault_client` |
+| 测试可执行文件 | `cloudvault_server_tests` |
 
 ---
 

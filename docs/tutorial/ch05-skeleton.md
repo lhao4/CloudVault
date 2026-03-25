@@ -206,7 +206,7 @@ LoginWindow（QWidget，宽 400px，背景 #F4F6F8）
             │       ├── icon_label（QLabel "💬"）
             │       └── title_widget（QWidget）
             │           └── title_layout（QVBoxLayout）
-            │               ├── app_name_label（"CloudHive"）
+            │               ├── app_name_label（"CloudVault"）
             │               └── subtitle_label（"即时通讯 · 文件传输"）
             ├── tab_widget_（QTabWidget）
             │   ├── Tab「登录」（QVBoxLayout）
@@ -371,9 +371,9 @@ int main(int argc, char* argv[]) {
     // QApplication 必须是第一个创建的 Qt 对象
     QApplication app(argc, argv);
 
-    app.setApplicationName("CloudHive");
+    app.setApplicationName("CloudVault");
     app.setApplicationVersion("2.0");
-    app.setOrganizationName("CloudHive");
+    app.setOrganizationName("CloudVault");
 
     LoginWindow window;
 
@@ -418,11 +418,11 @@ WSL 中 Qt 通常安装在 `~/Qt/6.x.x/gcc_64`。
 
 ### 5.9.3 选择运行目标
 
-工具栏下拉菜单选择 `cloudhive_client`，点击绿色 Run 按钮（或 `Shift+F10`）。
+工具栏下拉菜单选择 `cloudvault_client`，点击绿色 Run 按钮（或 `Shift+F10`）。
 
 正常输出：
 ```
-CloudHive 登录窗口应弹出，宽约 400px
+CloudVault 登录窗口应弹出，宽约 400px
 切换 Tab、输入内容、点击按钮均正常响应
 控制台输出：[LoginWindow] 准备登录：用户名 = xxx
 ```

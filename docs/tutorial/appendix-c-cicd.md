@@ -40,7 +40,7 @@ services:
   db:
     image: mysql:8.0
     environment:
-      MYSQL_DATABASE: cloudhive
+      MYSQL_DATABASE: cloudvault
   server:
     build: ./server
     ports: ["5000:5000"]
@@ -52,6 +52,6 @@ services:
 1. 安装 MySQL，创建数据库和用户
 2. 编译服务端：`cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build`
 3. 复制配置文件：`cp config/server.json.example config/server.json`（填写真实配置）
-4. 运行：`./build/cloudhive_server`
+4. 运行：`./build/cloudvault_server`
 
 参考：[CI/CD 与 GitHub Actions 入门](knowledge/cicd-guide.md)

@@ -1,4 +1,4 @@
-# CloudHive v2 — 测试规范
+# CloudVault v2 — 测试规范
 
 > **版本**：v2.0 | **状态**：草案
 

@@ -1,4 +1,4 @@
-# CloudHive 云巢 — 数据库设计文档
+# CloudVault 云巢 — 数据库设计文档
 
 > **版本**：v2.0 | **状态**：已确认 | **数据库**：MySQL 8.0
 
@@ -8,7 +8,7 @@
 
 | 项目 | 内容 |
 |------|------|
-| 数据库名 | `cloudhive` |
+| 数据库名 | `cloudvault` |
 | 字符集 | `utf8mb4` |
 | 排序规则 | `utf8mb4_unicode_ci` |
 | 引擎 | InnoDB（全表） |
@@ -314,16 +314,16 @@ WHERE gm.group_id = :gid AND u.online = 1;
 
 完整的建库脚本位于 [`sql/schema.sql`](../sql/schema.sql)，包含：
 
-1. `CREATE DATABASE IF NOT EXISTS cloudhive`
+1. `CREATE DATABASE IF NOT EXISTS cloudvault`
 2. 全部 6 张表的 `CREATE TABLE` 语句
 3. 创建应用专用账号并授权（避免使用 root）
 
 ```sql
 -- 创建应用账号示例（在 schema.sql 末尾）
-CREATE USER IF NOT EXISTS 'cloudhive_app'@'localhost'
+CREATE USER IF NOT EXISTS 'cloudvault_app'@'localhost'
     IDENTIFIED BY 'your_password_here';
 GRANT SELECT, INSERT, UPDATE, DELETE
-    ON cloudhive.* TO 'cloudhive_app'@'localhost';
+    ON cloudvault.* TO 'cloudvault_app'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
@@ -335,7 +335,7 @@ FLUSH PRIVILEGES;
 
 | 变更项 | v1 | v2 |
 |--------|----|----|
-| 数据库名 | `mydbqt` | `cloudhive` |
+| 数据库名 | `mydbqt` | `cloudvault` |
 | 密码字段 | `pwd VARCHAR(64)`（明文） | `password_hash VARCHAR(97)`（SHA-256+salt） |
 | 好友表主键 | 复合主键 `(user_id, friend_id)` | 独立自增 `id`，加唯一约束 |
 | 好友状态 | 无（仅已添加） | `status` 字段（0=待接受, 1=已添加） |

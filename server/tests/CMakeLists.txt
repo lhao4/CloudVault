@@ -1,6 +1,6 @@
 # ===========================================================
 # server/tests/CMakeLists.txt
-# 构建服务端单元测试可执行文件 cloudhive_server_tests
+# 构建服务端单元测试可执行文件 cloudvault_server_tests
 #
 # 测试框架：GoogleTest（GTest）
 # 运行方式：ctest --test-dir build --output-on-failure
@@ -29,21 +29,21 @@ file(GLOB_RECURSE TEST_SOURCES
 )
 
 # ── 定义测试可执行文件 ────────────────────────────────────
-add_executable(cloudhive_server_tests ${TEST_SOURCES})
+add_executable(cloudvault_server_tests ${TEST_SOURCES})
 
 # ── 链接测试框架和被测库 ──────────────────────────────────
 # GTest::gtest_main：包含 main() 函数，这样我们的测试文件不需要写 main()。
 # GTest::gtest：核心框架（EXPECT_*、ASSERT_* 等宏）。
-# cloudhive_common：被测代码（protocol、crypto）。
-target_link_libraries(cloudhive_server_tests
+# cloudvault_common：被测代码（protocol、crypto）。
+target_link_libraries(cloudvault_server_tests
     PRIVATE
         GTest::gtest_main
         GTest::gtest
-        cloudhive_common
+        cloudvault_common
 )
 
 # ── 头文件路径 ────────────────────────────────────────────
-target_include_directories(cloudhive_server_tests
+target_include_directories(cloudvault_server_tests
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
@@ -53,4 +53,4 @@ target_include_directories(cloudhive_server_tests
 #   自动发现测试文件中所有 TEST() / TEST_F() 并注册到 CTest。
 #   这样 ctest 可以逐个运行每个测试用例，并单独报告通过/失败。
 include(GoogleTest)
-gtest_discover_tests(cloudhive_server_tests)
+gtest_discover_tests(cloudvault_server_tests)

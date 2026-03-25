@@ -31,7 +31,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build
 
 # 使用 GDB 运行
-gdb ./build/cloudhive_server
+gdb ./build/cloudvault_server
 (gdb) run
 (gdb) bt      # 崩溃后查看调用栈
 ```

@@ -1,4 +1,4 @@
-# CloudHive 云巢 — 模块设计文档
+# CloudVault 云巢 — 模块设计文档
 
 > **版本**：v2.0 | **状态**：已确认
 
@@ -159,8 +159,8 @@ public:
 {
   "server":   { "host": "0.0.0.0", "port": 5000, "root_path": "./filesys" },
   "database": { "host": "localhost", "port": 3306,
-                "name": "cloudhive",  "user": "cloudhive_app",
-                "password_env": "CLOUDHIVE_DB_PASSWORD" },
+                "name": "cloudvault",  "user": "cloudvault_app",
+                "password_env": "CLOUDVAULT_DB_PASSWORD" },
   "thread_pool": { "size": 8 },
   "log":      { "level": "info", "file": "./logs/server.log" },
   "tls":      { "cert": "./certs/server.crt", "key": "./certs/server.key" }
