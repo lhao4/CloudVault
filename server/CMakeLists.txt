@@ -46,7 +46,7 @@ find_package(Threads REQUIRED)
 # CMAKE_MODULE_PATH：告诉 CMake 去哪里找自定义 Find 模块。
 # 第八章实现数据库层前标记为 OPTIONAL，骨架阶段可不安装。
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
-find_package(MySQL)   # TODO（第八章）：改回 REQUIRED
+find_package(MySQL REQUIRED)
 
 # ── 引入 common 静态库 ────────────────────────────────────
 # add_subdirectory()：将另一个目录的 CMakeLists.txt 纳入当前构建系统。

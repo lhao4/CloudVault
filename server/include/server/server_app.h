@@ -17,6 +17,9 @@
 #include "server/tcp_server.h"
 #include "server/thread_pool.h"
 #include "server/message_dispatcher.h"
+#include "server/session_manager.h"
+#include "server/db/database.h"
+#include "server/handler/auth_handler.h"
 
 #include <memory>
 #include <string>
@@ -28,10 +31,7 @@ public:
     ServerApp();
     ~ServerApp();
 
-    // 初始化所有模块；返回 false 表示初始化失败（如配置缺失、端口占用）
     bool init(const std::string& config_path);
-
-    // 启动服务，阻塞直到收到 SIGINT / SIGTERM
     void run();
 
 private:
@@ -40,9 +40,14 @@ private:
 
     bool initialized_ = false;
 
-    // 第七章组件
-    std::unique_ptr<cloudvault::EventLoop>         event_loop_;
-    std::unique_ptr<cloudvault::TcpServer>         tcp_server_;
-    std::unique_ptr<cloudvault::ThreadPool>        thread_pool_;
-    cloudvault::MessageDispatcher                  dispatcher_;
+    // 第七章：网络层
+    std::unique_ptr<cloudvault::EventLoop>     event_loop_;
+    std::unique_ptr<cloudvault::TcpServer>     tcp_server_;
+    std::unique_ptr<cloudvault::ThreadPool>    thread_pool_;
+    cloudvault::MessageDispatcher              dispatcher_;
+
+    // 第八章：数据层 + 会话
+    std::unique_ptr<cloudvault::Database>      db_;
+    cloudvault::SessionManager                 sessions_;
+    std::unique_ptr<cloudvault::AuthHandler>   auth_handler_;
 };

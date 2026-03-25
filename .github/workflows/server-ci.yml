@@ -30,7 +30,8 @@ jobs:
             libspdlog-dev \
             nlohmann-json3-dev \
             libssl-dev \
-            libgtest-dev
+            libgtest-dev \
+            libmysqlclient-dev
 
       - name: Configure
         run: cmake -B build -S server -G Ninja
