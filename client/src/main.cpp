@@ -5,6 +5,7 @@
 
 #include <QApplication>   // Qt 应用程序对象，管理事件循环
 #include <QFont>          // 用于设置全局字体
+#include <QIcon>          // 用于设置应用图标
 #include <QScreen>        // 用于获取屏幕尺寸（居中显示）
 
 #include "ui/login_window.h"
@@ -15,9 +16,12 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
 
     // 设置应用程序元信息（影响 QSettings 存储路径等）
-    app.setApplicationName("CloudHive");
+    app.setApplicationName("CloudVault");
     app.setApplicationVersion("2.0");
-    app.setOrganizationName("CloudHive");
+    app.setOrganizationName("CloudVault");
+
+    // 设置全局图标（任务栏、标题栏、Alt+Tab 均使用此图标）
+    app.setWindowIcon(QIcon(":/icons/app_icon.png"));
 
     // 设置全局字体：优先使用 Noto Sans CJK（支持中文），
     // 逗号后是备选字体，Qt 会按顺序查找第一个可用的
