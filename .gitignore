@@ -15,6 +15,11 @@ Thumbs.db
 .vscode/
 *.iml
 
+# CLion 构建目录（CLion 默认用 cmake-build-* 而非 build/）
+cmake-build-debug/
+cmake-build-release/
+cmake-build-*/
+
 # ───────────────────────────────────────────
 # CMake
 # ───────────────────────────────────────────
