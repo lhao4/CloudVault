@@ -78,6 +78,7 @@ compile_commands.json
 server/logs/
 server/filesys/
 server/config/server.json
+client/config/client.json
 
 # ───────────────────────────────────────────
 # 证书与密钥（绝不提交）

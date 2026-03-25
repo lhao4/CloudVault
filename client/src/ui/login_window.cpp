@@ -13,6 +13,13 @@
 #include "common/protocol.h"
 #include "common/protocol_codec.h"
 
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QLoggingCategory>
 #include <QPixmap>
 
@@ -25,26 +32,30 @@ Q_LOGGING_CATEGORY(lcLogin, "ui.login")
 // ─────────────────────────────────────────────────────────────────────────
 namespace {
 const QPair<const char*, const char*> kTheme[] = {
+    {"@bgFieldFocus",   "#FFFFFF"},  // 输入框聚焦背景
     {"@bgPage",         "#F4F6F8"},  // 页面背景
     {"@bgField",        "#F0F2F5"},  // 输入框背景
-    {"@bgFieldFocus",   "#FFFFFF"},  // 输入框聚焦背景
-    {"@bgToggle",       "#EFF6FF"},  // 密码切换按钮选中背景
     {"@bgToggleHover",  "#EAEDF0"},  // 密码切换按钮悬停背景
+    {"@bgToggle",       "#EFF6FF"},  // 密码切换按钮选中背景
     {"@border",         "#E2E6EA"},  // 默认边框
+    {"@txtDark",        "#374151"},  // 标签文字
     {"@txtPrimary",     "#111827"},  // 主文字
     {"@txtSecondary",   "#6B7280"},  // 次要文字
     {"@txtMuted",       "#9CA3AF"},  // 占位符文字
-    {"@txtDark",        "#374151"},  // 标签文字
-    {"@accent",         "#3B82F6"},  // 品牌蓝（按钮/高亮）
-    {"@accentHover",    "#2563EB"},  // 品牌蓝悬停
-    {"@accentPressed",  "#1D4ED8"},  // 品牌蓝按下
     {"@accentDisabled", "#93C5FD"},  // 品牌蓝禁用
+    {"@accentPressed",  "#1D4ED8"},  // 品牌蓝按下
+    {"@accentHover",    "#2563EB"},  // 品牌蓝悬停
+    {"@accent",         "#3B82F6"},  // 品牌蓝（按钮/高亮）
     {"@error",          "#EF4444"},  // 错误红
     {"@statusBg",       "#F0FDF4"},  // 状态栏背景
     {"@statusBorder",   "#BBF7D0"},  // 状态栏边框
     {"@statusDot",      "#16A34A"},  // 在线状态点
     {"@statusText",     "#15803D"},  // 状态栏文字
 };
+
+QString formatServerEndpoint(const QString& host, quint16 port) {
+    return QString("%1:%2").arg(host).arg(port);
+}
 } // namespace
 
 // =============================================================
@@ -53,21 +64,26 @@ const QPair<const char*, const char*> kTheme[] = {
 LoginWindow::LoginWindow(QWidget* parent)
     : QWidget(parent)
     , ui_(std::make_unique<Ui::LoginWindow>())
+    , auth_service_(tcp_client_, router_, this)
 {
     ui_->setupUi(this);
 
-    // Qt 6 内置 High DPI 支持，逻辑像素自动按 devicePixelRatio 缩放。
-    // 使用 setMinimumSize 而非 setFixedSize，允许布局在不同 DPI/字体配置下自适应。
     setMinimumSize(400, 560);
     resize(400, 560);
 
-    // 设置 header 图标（40×40 逻辑像素，scaledContents 已在 .ui 中开启）
     ui_->iconLabel->setPixmap(QPixmap(":/icons/app_icon.png"));
 
     setupStyle();
     connectSignals();
     registerHandlers();
-    setupNetwork();
+
+    server_config_loaded_ = loadServerConfig();
+    if (server_config_loaded_) {
+        ui_->serverAddrLabel->setText(serverEndpoint() + " · 已就绪");
+        setupNetwork();
+    } else {
+        applyConfigError("未找到有效配置");
+    }
 }
 
 // =============================================================
@@ -275,6 +291,40 @@ void LoginWindow::connectSignals() {
 
     connect(ui_->regConfirmToggleBtn, &QPushButton::toggled,
             this, &LoginWindow::toggleRegConfirmVisibility);
+
+    // AuthService 信号 → UI 槽
+    connect(&auth_service_, &cloudvault::AuthService::registerSuccess,
+            this, [this] {
+                ui_->regStatusLabel->setText("注册成功，请登录");
+                ui_->regStatusLabel->setStyleSheet("color: #16A34A;");
+                ui_->regStatusLabel->show();
+                resetRegBtn();
+            });
+
+    connect(&auth_service_, &cloudvault::AuthService::registerFailed,
+            this, [this](const QString& reason) {
+                ui_->regStatusLabel->setText(reason);
+                ui_->regStatusLabel->setStyleSheet("");
+                ui_->regStatusLabel->show();
+                resetRegBtn();
+            });
+
+    connect(&auth_service_, &cloudvault::AuthService::loginSuccess,
+            this, [this](int /*userId*/) {
+                ui_->loginStatusLabel->setText("登录成功");
+                ui_->loginStatusLabel->setStyleSheet("color: #16A34A;");
+                ui_->loginStatusLabel->show();
+                // TODO（后续章节）：跳转到主窗口
+                resetLoginBtn();
+            });
+
+    connect(&auth_service_, &cloudvault::AuthService::loginFailed,
+            this, [this](const QString& reason) {
+                ui_->loginStatusLabel->setText(reason);
+                ui_->loginStatusLabel->setStyleSheet("");
+                ui_->loginStatusLabel->show();
+                resetLoginBtn();
+            });
 }
 
 // =============================================================
@@ -297,9 +347,7 @@ void LoginWindow::onLoginClicked() {
     ui_->loginBtn->setText("登录中…");
 
     qCDebug(lcLogin) << "准备登录：用户名 =" << username;
-    // TODO（第六章）：AuthService::login(username, password)
-    // TODO（第六章）：下面的 resetLoginBtn() 调用移至 onLoginFailed() 回调中
-    resetLoginBtn();
+    auth_service_.login(username, password);
 }
 
 // =============================================================
@@ -343,9 +391,7 @@ void LoginWindow::onRegisterClicked() {
     ui_->regBtn->setText("注册中…");
 
     qCDebug(lcLogin) << "准备注册：用户名 =" << username << "昵称 =" << display_name;
-    // TODO（第六章）：AuthService::registerUser(username, display_name, password)
-    // TODO（第六章）：下面的 resetRegBtn() 调用移至 onRegisterFailed() 回调中
-    resetRegBtn();
+    auth_service_.registerUser(username, password);
 }
 
 // =============================================================
@@ -375,6 +421,65 @@ void LoginWindow::toggleRegConfirmVisibility() {
     ui_->regConfirmToggleBtn->setText(show ? "隐藏" : "显示");
 }
 
+bool LoginWindow::loadServerConfig() {
+    const QDir current_dir(QDir::currentPath());
+    const QDir app_dir(QCoreApplication::applicationDirPath());
+    const QStringList candidates = {
+        current_dir.filePath("client.json"),
+        current_dir.filePath("config/client.json"),
+        current_dir.filePath("client/config/client.json"),
+        current_dir.filePath("../config/client.json"),
+        current_dir.filePath("../client/config/client.json"),
+        current_dir.filePath("../../client/config/client.json"),
+        app_dir.filePath("client.json"),
+        app_dir.filePath("config/client.json"),
+        app_dir.filePath("../config/client.json"),
+        app_dir.filePath("../client/config/client.json"),
+        app_dir.filePath("../../client/config/client.json"),
+    };
+
+    for (const QString& path : candidates) {
+        const QString normalized_path = QDir::cleanPath(path);
+        QFile file(normalized_path);
+        if (!file.exists()) {
+            continue;
+        }
+        if (!file.open(QIODevice::ReadOnly)) {
+            qCWarning(lcLogin) << "Failed to open client config:"
+                               << normalized_path << file.errorString();
+            continue;
+        }
+
+        QJsonParseError parse_error;
+        const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parse_error);
+        if (parse_error.error != QJsonParseError::NoError || !doc.isObject()) {
+            qCWarning(lcLogin) << "Failed to parse client config:" << normalized_path
+                               << parse_error.errorString();
+            continue;
+        }
+
+        const QJsonObject server = doc.object().value("server").toObject();
+        const QString host = server.value("host").toString().trimmed();
+        const int port = server.value("port").toInt(0);
+
+        if (host.isEmpty() || port <= 0 || port > 65535) {
+            qCWarning(lcLogin) << "Invalid server config in" << normalized_path
+                               << "host=" << host << "port=" << port;
+            continue;
+        }
+
+        server_host_ = host;
+        server_port_ = static_cast<quint16>(port);
+        qCInfo(lcLogin) << "Loaded client config from"
+                        << QFileInfo(normalized_path).absoluteFilePath()
+                        << "server=" << serverEndpoint();
+        return true;
+    }
+
+    qCWarning(lcLogin) << "Client config is required but no valid config file was found";
+    return false;
+}
+
 // =============================================================
 // setupNetwork()：初始化网络层，连接到服务器
 // =============================================================
@@ -393,8 +498,7 @@ void LoginWindow::setupNetwork() {
                 router_.dispatch(hdr, body);
             });
 
-    // TODO（第八章）：从配置文件读取服务器地址
-    tcp_client_.connectToServer("127.0.0.1", 5000);
+    tcp_client_.connectToServer(server_host_, server_port_);
 }
 
 // =============================================================
@@ -407,7 +511,7 @@ void LoginWindow::registerHandlers() {
         [this](const cloudvault::PDUHeader& /*hdr*/,
                const std::vector<uint8_t>& /*body*/) {
             qCDebug(lcLogin) << "PONG received — server alive";
-            ui_->serverAddrLabel->setText("127.0.0.1:5000");
+            ui_->serverAddrLabel->setText(serverEndpoint() + " · 已连接");
             ui_->serverDotLabel->setStyleSheet("color: #16A34A;");  // 绿色
         });
 
@@ -419,7 +523,7 @@ void LoginWindow::registerHandlers() {
 // =============================================================
 void LoginWindow::onServerConnected() {
     qCDebug(lcLogin) << "Connected to server, sending PING";
-    ui_->serverAddrLabel->setText("连接中…");
+    ui_->serverAddrLabel->setText(serverEndpoint() + " · 连接中…");
 
     // 发送 PING 探测服务器延迟
     auto ping = cloudvault::PDUBuilder(cloudvault::MessageType::PING).build();
@@ -428,12 +532,28 @@ void LoginWindow::onServerConnected() {
 
 void LoginWindow::onServerDisconnected() {
     qCDebug(lcLogin) << "Disconnected from server";
-    ui_->serverAddrLabel->setText("未连接");
+    ui_->serverAddrLabel->setText(serverEndpoint() + " · 未连接");
     ui_->serverDotLabel->setStyleSheet("color: #EF4444;");  // 红色
 }
 
 void LoginWindow::onServerError(const QString& message) {
     qCWarning(lcLogin) << "Server error:" << message;
-    ui_->serverAddrLabel->setText("连接失败");
+    ui_->serverAddrLabel->setText(serverEndpoint() + " · 连接失败");
     ui_->serverDotLabel->setStyleSheet("color: #EF4444;");  // 红色
+}
+
+void LoginWindow::applyConfigError(const QString& message) {
+    ui_->serverAddrLabel->setText("配置错误");
+    ui_->serverDotLabel->setStyleSheet("color: #EF4444;");
+    ui_->loginStatusLabel->setText("客户端配置无效，请检查 client/config/client.json");
+    ui_->loginStatusLabel->show();
+    ui_->regStatusLabel->setText("客户端配置无效，请检查 client/config/client.json");
+    ui_->regStatusLabel->show();
+    ui_->loginBtn->setEnabled(false);
+    ui_->regBtn->setEnabled(false);
+    qCWarning(lcLogin) << "Client config error:" << message;
+}
+
+QString LoginWindow::serverEndpoint() const {
+    return formatServerEndpoint(server_host_, server_port_);
 }

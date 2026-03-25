@@ -12,7 +12,9 @@
 
 #include "network/tcp_client.h"
 #include "network/response_router.h"
+#include "network/auth_service.h"
 
+#include <QString>
 #include <QWidget>
 #include <memory>
 
@@ -46,12 +48,22 @@ private:
     void connectSignals();    // 绑定信号槽
     void resetLoginBtn();     // 恢复登录按钮为可点击状态
     void resetRegBtn();       // 恢复注册按钮为可点击状态
+    bool loadServerConfig();  // 从配置文件读取服务器地址
     void setupNetwork();      // 初始化网络层并连接服务器
     void registerHandlers();  // 注册 PDU 响应处理器
+    void applyConfigError(const QString& message);
+    QString serverEndpoint() const;
 
     std::unique_ptr<Ui::LoginWindow> ui_;  // RAII 管理，析构时自动释放
 
+    QString server_host_;
+    quint16 server_port_ = 0;
+    bool server_config_loaded_ = false;
+
     // 网络层（第七章）
-    cloudvault::TcpClient     tcp_client_;
-    cloudvault::ResponseRouter router_;
+    cloudvault::TcpClient      tcp_client_;
+    cloudvault::ResponseRouter  router_;
+
+    // 认证服务（第八章）
+    cloudvault::AuthService    auth_service_;
 };
