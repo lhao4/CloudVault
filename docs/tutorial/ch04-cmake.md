@@ -410,4 +410,4 @@ cmake --build build --config Release
 
 ## 本章新知识点
 
-- [CMake 构建系统详解](../knowledge/cmake-guide.md)
+- [CMake 构建系统详解](knowledge/cmake-guide.md)
