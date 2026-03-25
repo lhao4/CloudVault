@@ -1,0 +1,70 @@
+site_name: CloudVault 云巢
+site_description: 面向小型团队的私有化云文件管理与即时通讯系统
+site_url: https://<你的GitHub用户名>.github.io/CloudVault/
+repo_url: https://github.com/<你的GitHub用户名>/CloudVault
+repo_name: CloudVault
+docs_dir: docs
+
+theme:
+  name: material
+  language: zh
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换到深色模式
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换到浅色模式
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search:
+      lang: zh
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - 首页: index.md
+  - 项目实战教程:
+    - 教程概述与目录: tutorial/index.md
+    - 知识补充:
+      - Git 使用指南: tutorial/knowledge/git-guide.md
+      - CMake 构建系统: tutorial/knowledge/cmake-guide.md
+      - epoll 工作原理: tutorial/knowledge/epoll-guide.md
+      - Qt 信号槽机制: tutorial/knowledge/qt-signals-slots.md
+      - CI/CD 与 GitHub Actions: tutorial/knowledge/cicd-guide.md
+      - MkDocs 文档站搭建: tutorial/knowledge/mkdocs-github-pages.md
+  - 工程参考:
+    - PRD 产品需求: reference/prd.md
+    - 系统架构: reference/architecture.md
+    - API 协议: reference/api.md
+    - 数据库设计: reference/database.md
+    - 模块划分: reference/modules.md
+    - UI 流程: reference/ui-flow.md
+    - 测试方案: reference/testing.md
+    - 项目规范: reference/conventions.md
