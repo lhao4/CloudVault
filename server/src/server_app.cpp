@@ -15,6 +15,7 @@
 #include <csignal>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <thread>
 
 using json = nlohmann::json;
