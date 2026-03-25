@@ -2,13 +2,13 @@ name: Client CI
 
 on:
   push:
-    branches: [master]
+    branches: [master, dev]
     paths:
       - "client/**"
       - "common/**"
       - ".github/workflows/client-ci.yml"
   pull_request:
-    branches: [master]
+    branches: [master, dev]
     paths:
       - "client/**"
       - "common/**"
