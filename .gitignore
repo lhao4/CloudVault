@@ -1,27 +1,38 @@
-# OS / editor
+# ───────────────────────────────────────────
+# AI
+# ───────────────────────────────────────────
+.claude/
+.codex/
+# ───────────────────────────────────────────
+# OS / Editor
+# ───────────────────────────────────────────
 .DS_Store
 Thumbs.db
 *.swp
 *.swo
 *~
+.idea/
+.vscode/
+*.iml
 
-# Qt Creator / user-specific files
-*.pro.user
-*.pro.user.*
-*.qbs.user
-*.qmake.stash
-*.qtc_clangd/
-.qtcreator/
+# ───────────────────────────────────────────
+# CMake
+# ───────────────────────────────────────────
+build/
+**/build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+_deps/
+*.cmake
+!cmake/
 
-# Build directories
-build*/
-**/build*/
-
-# Generic C/C++ build artifacts
+# ───────────────────────────────────────────
+# C/C++ Build Artifacts
+# ───────────────────────────────────────────
 *.o
 *.obj
-*.lo
-*.la
 *.a
 *.lib
 *.so
@@ -30,20 +41,62 @@ build*/
 *.dll
 *.exe
 *.out
-*.app
 *.dSYM/
 
-# Qt generated files
+# ───────────────────────────────────────────
+# Qt
+# ───────────────────────────────────────────
+# Qt Creator 用户文件
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qmake.stash
+*.qtc_clangd/
+.qtcreator/
+
+# Qt 自动生成的文件（CMake AUTOMOC/AUTOUIC/AUTORCC 产物）
 moc_*.cpp
 moc_*.h
 qrc_*.cpp
 ui_*.h
 
-# CMake / compile database artifacts
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
+# ───────────────────────────────────────────
+# Compile Commands（clangd 工具链）
+# ───────────────────────────────────────────
+# 通常由 cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON 生成
+# 保留根目录的符号链接版本（如果有），忽略 build/ 内的原始文件
 compile_commands.json
 
-# Windows ADS side files (seen in this repo)
+# ───────────────────────────────────────────
+# Server 运行时产物
+# ───────────────────────────────────────────
+server/logs/
+server/filesys/
+server/config/server.json
+
+# ───────────────────────────────────────────
+# 证书与密钥（绝不提交）
+# ───────────────────────────────────────────
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+certs/
+
+# ───────────────────────────────────────────
+# 环境变量与密码文件（绝不提交）
+# ───────────────────────────────────────────
+.env
+.env.*
+secrets/
+
+# ───────────────────────────────────────────
+# MkDocs 构建产物
+# ───────────────────────────────────────────
+site/
+
+# ───────────────────────────────────────────
+# Windows 区域标识符
+# ───────────────────────────────────────────
 *:Zone.Identifier
