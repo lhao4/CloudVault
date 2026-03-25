@@ -395,28 +395,15 @@ findByConnection(std::shared_ptr<TcpConnection>)
 
 ### 9.6.3 MainWindow
 
-[main_window.cpp](/mnt/d/CloudVault/client/src/ui/main_window.cpp) 是一个最小主窗口壳。
+[main_window.cpp](/mnt/d/CloudVault/client/src/ui/main_window.cpp) 现在已经承载第九章主界面三栏布局：
 
-当前它只做一件事：
+- 左栏显示联系人搜索、好友列表与底部导航
+- 中栏显示消息页 / 文件页 / 我的资料页
+- 右栏显示联系人详情、文件操作区或个人状态
+- 左栏好友列表直接消费 `FriendService::friendsRefreshed` 的结果
+- 选择联系人后会同步更新中栏标题和右栏详情
 
-- 把 `FriendPage` 作为中央区域显示出来
-
-为第十章聊天功能保留扩展空间。
-
-### 9.6.4 FriendPage
-
-[friend_page.cpp](/mnt/d/CloudVault/client/src/ui/friend_page.cpp) 提供最小可用好友交互：
-
-- 搜索用户
-- 发送好友申请
-- 收到在线申请后弹确认框
-- 刷新好友列表
-- 删除好友
-
-当前好友列表项会显示：
-
-- 用户名
-- 在线/离线状态
+好友相关交互不再单独放在 `FriendPage` 中，而是已经收敛进 `MainWindow` 这套三栏主界面实现中。
 
 ---
 
