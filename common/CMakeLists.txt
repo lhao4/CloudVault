@@ -73,3 +73,11 @@ target_link_libraries(cloudvault_common
     PUBLIC
         OpenSSL::Crypto
 )
+
+# ── 单元测试（可选）──────────────────────────────────────
+# GTest 找不到时静默跳过，不阻塞主项目的构建
+find_package(GTest QUIET)
+if(GTest_FOUND)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
