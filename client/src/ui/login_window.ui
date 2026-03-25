@@ -266,7 +266,7 @@
          </item>
          <item>
           <widget class="QLabel" name="serverAddrLabel">
-           <property name="text"><string>127.0.0.1:5000 · 已就绪</string></property>
+           <property name="text"><string>127.0.0.1:5001 · 已就绪</string></property>
           </widget>
          </item>
          <item>

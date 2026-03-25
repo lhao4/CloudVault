@@ -1,14 +1,46 @@
 // =============================================================
 // server/include/server/handler/auth_handler.h
-// TODO（第八章）：用户认证业务逻辑
+// 用户认证业务逻辑处理器
 //
 // 处理的 MessageType：
-//   - REGISTER       注册（校验格式 → 检查重名 → hash 密码 → 入库 → 建目录）
-//   - LOGIN          登录（查用户 → verify 密码 → 防重复登录 → 注册会话 → 下发离线消息）
-//   - LOGOUT         登出（移除会话 → 更新 online 状态）
-//   - UPDATE_PROFILE 修改资料（昵称、签名、头像）
+//   REGISTER_REQUEST → 注册（格式校验 → 检查重名 → 存库）
+//   LOGIN_REQUEST    → 登录（查用户 → 验密码 → 防重复 → 注册会话）
+//   LOGOUT           → 登出（移除会话 → 更新 online 状态）
 // =============================================================
 
 #pragma once
 
-// TODO（第八章）：实现 AuthHandler 类
+#include "server/db/database.h"
+#include "server/db/user_repository.h"
+#include "server/session_manager.h"
+#include "common/protocol.h"
+
+#include <memory>
+#include <vector>
+
+namespace cloudvault {
+
+class TcpConnection;
+
+class AuthHandler {
+public:
+    AuthHandler(Database& db, SessionManager& sessions);
+
+    void handleRegister(std::shared_ptr<TcpConnection>  conn,
+                        const PDUHeader&                hdr,
+                        const std::vector<uint8_t>&     body);
+
+    void handleLogin(std::shared_ptr<TcpConnection>  conn,
+                     const PDUHeader&                hdr,
+                     const std::vector<uint8_t>&     body);
+
+    void handleLogout(std::shared_ptr<TcpConnection>  conn,
+                      const PDUHeader&                hdr,
+                      const std::vector<uint8_t>&     body);
+
+private:
+    UserRepository users_;
+    SessionManager& sessions_;
+};
+
+} // namespace cloudvault
