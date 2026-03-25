@@ -146,8 +146,10 @@ void TcpConnection::doClose() {
     ::close(fd_);
     fd_ = -1;
 
-    if (close_cb_) {
-        close_cb_(shared_from_this());
+    for (const auto& cb : close_cbs_) {
+        if (cb) {
+            cb(shared_from_this());
+        }
     }
 }
 

@@ -1,15 +1,54 @@
 // =============================================================
 // server/include/server/handler/friend_handler.h
-// TODO（第九章）：好友系统业务逻辑
-//
-// 处理的 MessageType：
-//   - FIND_USER      查找用户（返回用户名、昵称、在线状态）
-//   - ADD_FRIEND     发送好友请求（转发给在线目标 / 存离线消息）
-//   - AGREE_FRIEND   接受好友请求（双向入库）
-//   - FLUSH_FRIENDS  获取完整好友列表（含在线状态）
-//   - DELETE_FRIEND  删除好友（双向删除，通知对方）
+// 好友系统业务逻辑
 // =============================================================
 
 #pragma once
 
-// TODO（第九章）：实现 FriendHandler 类
+#include "common/protocol.h"
+#include "server/db/friend_repository.h"
+#include "server/db/user_repository.h"
+#include "server/session_manager.h"
+
+#include <mutex>
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+namespace cloudvault {
+
+class TcpConnection;
+
+class FriendHandler {
+public:
+    FriendHandler(Database& db, SessionManager& sessions);
+
+    void handleFindUser(std::shared_ptr<TcpConnection> conn,
+                        const PDUHeader& hdr,
+                        const std::vector<uint8_t>& body);
+    void handleAddFriend(std::shared_ptr<TcpConnection> conn,
+                         const PDUHeader& hdr,
+                         const std::vector<uint8_t>& body);
+    void handleAgreeFriend(std::shared_ptr<TcpConnection> conn,
+                           const PDUHeader& hdr,
+                           const std::vector<uint8_t>& body);
+    void handleFlushFriends(std::shared_ptr<TcpConnection> conn,
+                            const PDUHeader& hdr,
+                            const std::vector<uint8_t>& body);
+    void handleDeleteFriend(std::shared_ptr<TcpConnection> conn,
+                            const PDUHeader& hdr,
+                            const std::vector<uint8_t>& body);
+
+private:
+    bool addPendingRequest(int target_user_id, int requester_user_id);
+    bool consumePendingRequest(int target_user_id, int requester_user_id);
+
+    UserRepository   users_;
+    FriendRepository friends_;
+    SessionManager&  sessions_;
+    std::mutex pending_mutex_;
+    std::unordered_map<int, std::unordered_set<int>> pending_requests_;
+};
+
+} // namespace cloudvault

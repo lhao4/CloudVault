@@ -124,8 +124,8 @@ void TcpServer::onAccept() {
         connections_[conn_fd] = conn;
 
         // TcpConnection 关闭时从 connections_ 移除
-        conn->setCloseCallback([this](std::shared_ptr<TcpConnection> c) {
-            connections_.erase(c->fd());
+        conn->setCloseCallback([this, conn_fd](std::shared_ptr<TcpConnection>) {
+            connections_.erase(conn_fd);
         });
 
         // 注册可读事件（EPOLLET 边缘触发）

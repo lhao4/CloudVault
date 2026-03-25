@@ -44,7 +44,7 @@ public:
     void close();
 
     void setMessageCallback(MessageCallback cb) { msg_cb_ = std::move(cb); }
-    void setCloseCallback  (CloseCallback   cb) { close_cb_ = std::move(cb); }
+    void setCloseCallback  (CloseCallback   cb) { close_cbs_.push_back(std::move(cb)); }
 
     // 由 EventLoop 回调，在 IO 线程执行
     void onReadable();
@@ -65,7 +65,7 @@ private:
     std::vector<uint8_t> send_buf_;
 
     MessageCallback msg_cb_;
-    CloseCallback   close_cb_;
+    std::vector<CloseCallback> close_cbs_;
 };
 
 } // namespace cloudvault

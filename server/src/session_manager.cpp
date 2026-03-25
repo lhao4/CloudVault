@@ -66,6 +66,17 @@ std::vector<std::string> SessionManager::onlineUsers() const {
     return users;
 }
 
+std::optional<SessionManager::SessionInfo>
+SessionManager::findByConnection(std::shared_ptr<TcpConnection> conn) const {
+    std::shared_lock lock(mutex_);
+    for (const auto& [id, sess] : by_id_) {
+        if (sess.conn == conn) {
+            return SessionInfo{sess.user_id, sess.username};
+        }
+    }
+    return std::nullopt;
+}
+
 void SessionManager::sendTo(const std::string& username,
                              std::vector<uint8_t> data) {
     auto conn = getConnection(username);

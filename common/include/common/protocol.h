@@ -40,11 +40,19 @@ enum class MessageType : uint32_t {
     LOGOUT              = 0x0105,
 
     // 好友（第九章）
-    FIND_USER           = 0x0201,
-    ADD_FRIEND          = 0x0202,
-    AGREE_FRIEND        = 0x0203,
-    FLUSH_FRIENDS       = 0x0204,
-    DELETE_FRIEND       = 0x0205,
+    FIND_USER_REQUEST   = 0x0201,
+    FIND_USER_RESPONSE  = 0x0202,
+    ADD_FRIEND_REQUEST  = 0x0203,
+    ADD_FRIEND_RESPONSE = 0x0204,
+    FRIEND_REQUEST_PUSH = 0x0205,
+    AGREE_FRIEND_REQUEST = 0x0206,
+    AGREE_FRIEND_RESPONSE = 0x0207,
+    FRIEND_ADDED_PUSH   = 0x0208,
+    FLUSH_FRIENDS_REQUEST = 0x0209,
+    FLUSH_FRIENDS_RESPONSE = 0x020A,
+    DELETE_FRIEND_REQUEST = 0x020B,
+    DELETE_FRIEND_RESPONSE = 0x020C,
+    FRIEND_DELETED_PUSH = 0x020D,
 
     // 聊天（第十章）
     CHAT                = 0x0301,

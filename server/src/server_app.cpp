@@ -142,6 +142,7 @@ bool ServerApp::init(const std::string& config_path) {
     }
 
     auth_handler_ = std::make_unique<cloudvault::AuthHandler>(*db_, sessions_);
+    friend_handler_ = std::make_unique<cloudvault::FriendHandler>(*db_, sessions_);
 
     // ── 6. 初始化网络层（第七章）─────────────────────────────
     try {
@@ -224,7 +225,46 @@ void ServerApp::registerHandlers() {
             auth_handler_->handleLogout(conn, hdr, body);
         });
 
-    // TODO（第九章）：FIND_USER、ADD_FRIEND ...
+    // 好友（第九章）
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::FIND_USER_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            friend_handler_->handleFindUser(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::ADD_FRIEND_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            friend_handler_->handleAddFriend(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::AGREE_FRIEND_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            friend_handler_->handleAgreeFriend(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::FLUSH_FRIENDS_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            friend_handler_->handleFlushFriends(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::DELETE_FRIEND_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            friend_handler_->handleDeleteFriend(conn, hdr, body);
+        });
 }
 
 // =============================================================

@@ -20,6 +20,7 @@
 #include "server/session_manager.h"
 #include "server/db/database.h"
 #include "server/handler/auth_handler.h"
+#include "server/handler/friend_handler.h"
 
 #include <memory>
 #include <string>
@@ -50,4 +51,5 @@ private:
     std::unique_ptr<cloudvault::Database>      db_;
     cloudvault::SessionManager                 sessions_;
     std::unique_ptr<cloudvault::AuthHandler>   auth_handler_;
+    std::unique_ptr<cloudvault::FriendHandler> friend_handler_;
 };

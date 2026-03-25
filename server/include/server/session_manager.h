@@ -11,6 +11,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
@@ -22,6 +23,11 @@ class TcpConnection;
 
 class SessionManager {
 public:
+    struct SessionInfo {
+        int         user_id = 0;
+        std::string username;
+    };
+
     // 注册登录会话
     void addSession(int user_id,
                     const std::string& username,
@@ -41,6 +47,10 @@ public:
 
     // 获取在线用户名列表
     std::vector<std::string> onlineUsers() const;
+
+    // 根据连接反查当前会话身份
+    std::optional<SessionInfo>
+    findByConnection(std::shared_ptr<TcpConnection> conn) const;
 
     // 向指定用户发送 PDU（线程安全）
     void sendTo(const std::string& username, std::vector<uint8_t> data);
