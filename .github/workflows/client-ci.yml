@@ -35,10 +35,7 @@ jobs:
       - name: Add MinGW to PATH
         shell: pwsh
         run: |
-          $mingwDir = Get-ChildItem "C:\Qt\Tools" -Filter "mingw*" |
-            Sort-Object Name -Descending |
-            Select-Object -First 1
-          "$($mingwDir.FullName)\bin" |
+          "$env:IQTA_TOOLS\mingw1310_64\bin" |
             Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Install OpenSSL for MinGW (MSYS2)
