@@ -1,6 +1,6 @@
 // =============================================================
 // server/src/server_app.cpp
-// ServerApp 实现（第七章：接入网络层）
+// ServerApp 实现（第八章：接入数据库与认证层）
 // =============================================================
 
 #include "server/server_app.h"
@@ -104,7 +104,46 @@ bool ServerApp::init(const std::string& config_path) {
     spdlog::info("数据库    : {}:{}/{}", db_host, db_port, db_name);
     spdlog::info("日志级别  : {}", log_level);
 
-    // ── 5. 初始化网络层（第七章）─────────────────────────────
+    // ── 5. 初始化数据库连接池（第八章）──────────────────────
+    const std::string db_user = cfg.value(jp("/database/user"), std::string("root"));
+    const int db_pool = cfg.value(jp("/database/pool_size"), 8);
+
+    // 密码优先从环境变量读取，其次从配置文件 password 字段
+    std::string db_password;
+    {
+        const auto& db_sec = cfg["database"];
+        if (db_sec.contains("password_env") && db_sec["password_env"].is_string()) {
+            const std::string env_name = db_sec["password_env"].get<std::string>();
+            if (const char* v = std::getenv(env_name.c_str())) {
+                db_password = v;
+            } else {
+                spdlog::warn("数据库密码环境变量未设置：{}", env_name);
+            }
+        }
+        if (db_password.empty() &&
+            db_sec.contains("password") && db_sec["password"].is_string()) {
+            db_password = db_sec["password"].get<std::string>();
+        }
+    }
+    spdlog::info("DB user={}, password_len={}", db_user, db_password.size());
+
+    try {
+        cloudvault::Database::Config db_cfg;
+        db_cfg.host      = db_host;
+        db_cfg.port      = db_port;
+        db_cfg.db_name   = db_name;
+        db_cfg.user      = db_user;
+        db_cfg.password  = db_password;
+        db_cfg.pool_size = db_pool;
+        db_ = std::make_unique<cloudvault::Database>(std::move(db_cfg));
+    } catch (const std::exception& e) {
+        spdlog::error("数据库初始化失败：{}", e.what());
+        return false;
+    }
+
+    auth_handler_ = std::make_unique<cloudvault::AuthHandler>(*db_, sessions_);
+
+    // ── 6. 初始化网络层（第七章）─────────────────────────────
     try {
         event_loop_  = std::make_unique<cloudvault::EventLoop>();
         thread_pool_ = std::make_unique<cloudvault::ThreadPool>(
@@ -116,10 +155,10 @@ bool ServerApp::init(const std::string& config_path) {
         return false;
     }
 
-    // ── 6. 注册消息处理器 ────────────────────────────────────
+    // ── 7. 注册消息处理器 ────────────────────────────────────
     registerHandlers();
 
-    // ── 7. 配置新连接回调 ────────────────────────────────────
+    // ── 8. 配置新连接回调 ────────────────────────────────────
     tcp_server_->setNewConnectionCallback(
         [this](std::shared_ptr<cloudvault::TcpConnection> conn) {
             spdlog::info("Client connected: {}", conn->peerAddr());
@@ -136,7 +175,7 @@ bool ServerApp::init(const std::string& config_path) {
                 });
         });
 
-    // ── 8. 注册信号处理 ───────────────────────────────────────
+    // ── 9. 注册信号处理 ───────────────────────────────────────
     std::signal(SIGINT,  onSignal);
     std::signal(SIGTERM, onSignal);
 
@@ -160,7 +199,31 @@ void ServerApp::registerHandlers() {
             conn->send(std::move(pong));
         });
 
-    // TODO（第八章）：LOGIN_REQUEST、REGISTER_REQUEST
+    // 认证（第八章）
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::REGISTER_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            auth_handler_->handleRegister(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::LOGIN_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            auth_handler_->handleLogin(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::LOGOUT,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            auth_handler_->handleLogout(conn, hdr, body);
+        });
+
     // TODO（第九章）：FIND_USER、ADD_FRIEND ...
 }
 
@@ -200,12 +263,13 @@ void ServerApp::shutdown() {
 
     spdlog::info("正在关闭服务...");
 
-    // event_loop_ 已在 run() 中 stop，资源由 unique_ptr 析构释放
-    thread_pool_.reset();   // 等待所有工作线程完成当前任务
+    // 先等工作线程处理完，再释放 DB（工作线程可能持有 DB 连接）
+    thread_pool_.reset();
     tcp_server_.reset();
     event_loop_.reset();
 
-    // TODO（第八章）：db_pool_.close()
+    auth_handler_.reset();
+    db_.reset();
 
     spdlog::info("CloudVault Server 已关闭，Bye.");
     spdlog::shutdown();
