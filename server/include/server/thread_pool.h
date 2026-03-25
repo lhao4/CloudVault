@@ -1,14 +1,36 @@
 // =============================================================
 // server/include/server/thread_pool.h
-// TODO（第七章）：固定大小工作线程池
+// 固定大小工作线程池
 //
-// 职责：
-//   - 创建 N 个工作线程（数量由 config/thread_count 决定）
-//   - 提供线程安全的任务队列（std::function<void()>）
-//   - 主线程将解析好的 PDU 封装为任务 enqueue() 给线程池
-//   - 工作线程从队列取任务，调用 MessageDispatcher 分发处理
+// 职责：IO 线程将 PDU 封装为任务 enqueue() 给线程池，
+//       工作线程异步执行业务逻辑
 // =============================================================
 
 #pragma once
 
-// TODO（第七章）：实现 ThreadPool 类
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include <vector>
+
+namespace cloudvault {
+
+class ThreadPool {
+public:
+    explicit ThreadPool(size_t num_threads);
+    ~ThreadPool();
+
+    // 提交任务（线程安全）
+    void enqueue(std::function<void()> task);
+
+private:
+    std::vector<std::thread>           workers_;
+    std::queue<std::function<void()>>  tasks_;
+    std::mutex                         mutex_;
+    std::condition_variable            cv_;
+    bool                               stop_{false};
+};
+
+} // namespace cloudvault
