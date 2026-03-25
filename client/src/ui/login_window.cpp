@@ -11,6 +11,7 @@
 #include "ui_login_window.h"  // AUTOUIC 自动生成，路径在 cmake-build-debug/ 下
 
 #include <QLoggingCategory>
+#include <QPixmap>
 
 // 日志分类：运行时可通过 QT_LOGGING_RULES="ui.login=true" 环境变量启用
 Q_LOGGING_CATEGORY(lcLogin, "ui.login")
@@ -56,6 +57,9 @@ LoginWindow::LoginWindow(QWidget* parent)
     // 使用 setMinimumSize 而非 setFixedSize，允许布局在不同 DPI/字体配置下自适应。
     setMinimumSize(400, 560);
     resize(400, 560);
+
+    // 设置 header 图标（40×40 逻辑像素，scaledContents 已在 .ui 中开启）
+    ui_->iconLabel->setPixmap(QPixmap(":/icons/app_icon.png"));
 
     setupStyle();
     connectSignals();
