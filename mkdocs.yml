@@ -52,6 +52,25 @@ nav:
   - 首页: index.md
   - 项目实战教程:
     - 教程概述与目录: tutorial/index.md
+    - 第一章 项目背景与需求分析: tutorial/ch01-background.md
+    - 第二章 技术选型与架构概览: tutorial/ch02-tech-stack.md
+    - 第三章 开发环境搭建: tutorial/ch03-environment.md
+    - 第四章 工程初始化与 CMake 配置: tutorial/ch04-cmake.md
+    - 第五章 两端骨架: tutorial/ch05-skeleton.md
+    - 第六章 协议基础: tutorial/ch06-protocol.md
+    - 第七章 建立连接: tutorial/ch07-ping-pong.md
+    - 第八章 注册与登录: tutorial/ch08-auth.md
+    - 第九章 好友功能: tutorial/ch09-friend.md
+    - 第十章 即时聊天: tutorial/ch10-chat.md
+    - 第十一章 文件管理: tutorial/ch11-file-manager.md
+    - 第十二章 文件传输: tutorial/ch12-file-transfer.md
+    - 第十三章 文件分享: tutorial/ch13-file-share.md
+    - 附录:
+      - 附录 A 测试与调试: tutorial/appendix-a-testing.md
+      - 附录 B 安全加固: tutorial/appendix-b-security.md
+      - 附录 C CI/CD 与部署: tutorial/appendix-c-cicd.md
+      - 附录 D 常见错误汇总: tutorial/appendix-d-errors.md
+      - 附录 E Git 提交历史: tutorial/appendix-e-git-log.md
     - 知识补充:
       - Git 使用指南: tutorial/knowledge/git-guide.md
       - CMake 构建系统: tutorial/knowledge/cmake-guide.md
