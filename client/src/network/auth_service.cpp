@@ -7,8 +7,13 @@
 
 #include "common/protocol_codec.h"
 
-#include <arpa/inet.h>
 #include <QLoggingCategory>
+
+#ifdef _WIN32
+#  include <winsock2.h>
+#else
+#  include <arpa/inet.h>
+#endif
 
 Q_LOGGING_CATEGORY(lcAuth, "network.auth")
 
