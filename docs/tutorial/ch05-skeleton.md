@@ -5,8 +5,8 @@
 > **本章目标**：
 >
 > 1. 解决 CMake 配置报错，让 CLion 成功加载项目
-> 2. 实现 `LoginWindow`：带样式的登录/注册双 Tab 窗口
-> 3. 本地字段校验（不接网络，第六章再接入）
+> 2. 用 Qt Designer `.ui` 文件实现 `LoginWindow`：带样式的登录/注册双 Tab 窗口
+> 3. 本地字段校验、密码显示/隐藏、应用图标（不接网络，第六章再接入）
 >
 > **验收标准**：CLion 点击 Run → 弹出登录窗口，Tab 可切换，校验逻辑正常。
 
@@ -62,43 +62,58 @@ CMake Error: Cannot find source file: src/protocol_codec.cpp
 
 ---
 
-## 5.2 变量设计：先想清楚，再写代码
+## 5.2 AUTOUIC：用 .ui 文件替代手写布局
 
-在写 `LoginWindow` 之前，先把需要哪些成员变量想清楚。
+### 5.2.1 两种写 UI 的方式
 
-### 5.2.1 为什么控件要用指针？
+Qt 有两种组织界面的方式：
 
-Qt 窗口控件**必须**在堆上分配（用 `new`），原因是：
+| 方式 | 优点 | 缺点 |
+|------|------|------|
+| 纯代码（手写 `new QLabel()`） | 完全掌控，适合动态生成 | 几百行布局代码，难维护 |
+| `.ui` 文件（Qt Designer XML） | 布局与逻辑分离，所见即所得 | 需要 AUTOUIC 工具链 |
 
-1. **parent-child 内存管理**：Qt 的 `QObject` 系统会在父对象析构时自动 `delete` 所有子对象。控件必须在堆上才能被父对象"收养"并管理生命周期。
-2. **延迟初始化**：控件在 `setupUi()` 中构建，不能在构造函数初始化列表里初始化（初始化列表要求类型完整，而我们的头文件只有前向声明）。
+本项目采用 **`.ui` 文件** 方式。CMake 中已开启：
 
-所以成员变量全部是**裸指针**（raw pointer），但不需要手动 `delete`——Qt 帮我们管理。
+```cmake
+set(CMAKE_AUTOUIC ON)   # 自动运行 UIC，将 .ui 转换为 ui_*.h
+set(CMAKE_AUTOMOC ON)   # 自动运行 MOC，处理 Q_OBJECT 宏
+set(CMAKE_AUTORCC ON)   # 自动运行 RCC，将 .qrc 资源编译进二进制
+```
 
-### 5.2.2 命名规则
+### 5.2.2 AUTOUIC 的工作原理
 
-根据 `docs/reference/conventions.md`：
+```
+login_window.ui  ──UIC──▶  ui_login_window.h（自动生成）
+                                │
+                                │ 包含 Ui::LoginWindow 结构体
+                                │ 包含 setupUi(QWidget*) 方法
+                                ▼
+login_window.cpp  ──▶  ui_->setupUi(this)  ──▶  所有控件被创建并挂载
+```
 
-- 成员变量：`snake_case_`（尾部加下划线）
-- 控件按 **所属区域 + 控件类型** 命名，一眼看出用途
+`setupUi(this)` 一行代码等价于以前几百行的 `new QLabel / new QLineEdit / layout->addWidget(...)` 。
 
-### 5.2.3 完整成员变量清单
+### 5.2.3 成员变量：只需一个 unique_ptr
 
-| 变量名 | 类型 | 所属 Tab | 作用 |
-|--------|------|---------|------|
-| `tab_widget_` | `QTabWidget*` | — | 登录/注册 Tab 容器 |
-| `login_username_edit_` | `QLineEdit*` | 登录 | 用户名输入框 |
-| `login_password_edit_` | `QLineEdit*` | 登录 | 密码输入框（Password 模式） |
-| `login_btn_` | `QPushButton*` | 登录 | 「登录」按钮 |
-| `login_status_label_` | `QLabel*` | 登录 | 错误提示（初始隐藏） |
-| `reg_username_edit_` | `QLineEdit*` | 注册 | 注册用户名 |
-| `reg_display_name_edit_` | `QLineEdit*` | 注册 | 昵称（显示名） |
-| `reg_password_edit_` | `QLineEdit*` | 注册 | 密码（Password 模式） |
-| `reg_confirm_edit_` | `QLineEdit*` | 注册 | 确认密码 |
-| `reg_btn_` | `QPushButton*` | 注册 | 「创建账号」按钮 |
-| `reg_status_label_` | `QLabel*` | 注册 | 注册结果提示（初始隐藏） |
-| `server_dot_label_` | `QLabel*` | 底栏 | 彩色圆点 "●" |
-| `server_addr_label_` | `QLabel*` | 底栏 | 服务器地址和状态文字 |
+旧的手写方式需要声明十几个成员指针：
+
+```cpp
+// ❌ 手写方式：臃肿
+QTabWidget*  tab_widget_;
+QLineEdit*   login_username_edit_;
+QPushButton* login_btn_;
+// ... 还有十几个
+```
+
+AUTOUIC 方式只需要**一个智能指针**：
+
+```cpp
+// ✅ AUTOUIC 方式：简洁
+std::unique_ptr<Ui::LoginWindow> ui_;
+```
+
+所有控件通过 `ui_->控件名` 访问，控件名来自 `.ui` 文件中的 `objectName`。
 
 ---
 
@@ -106,145 +121,107 @@ Qt 窗口控件**必须**在堆上分配（用 `new`），原因是：
 
 ### 5.3.1 为什么用前向声明？
 
-头文件中我们只需要告诉编译器"这些类型存在"，不需要它的完整定义——因为我们只用了指针（指针的大小是固定的，不需要知道类的完整布局）。
+`Ui::LoginWindow` 的完整定义在 AUTOUIC 生成的 `ui_login_window.h` 中（位于构建目录）。
+头文件只用前向声明，不 `#include "ui_login_window.h"`，原因：
 
-用前向声明替代 `#include`：
 - 加快编译速度（避免级联包含）
 - 减少头文件间的耦合
 
-完整的 `#include` 放在 `.cpp` 文件里，只在真正需要调用方法时包含。
+完整的 `#include "ui_login_window.h"` 放在 `.cpp` 文件里。
 
-### 5.3.2 Q_OBJECT 宏
+### 5.3.2 unique_ptr 的析构函数陷阱
 
 ```cpp
-class LoginWindow : public QWidget {
-    Q_OBJECT
-    ...
-};
+// login_window.h
+std::unique_ptr<Ui::LoginWindow> ui_;   // 前向声明，Ui::LoginWindow 是不完整类型
 ```
 
-`Q_OBJECT` 是 Qt 的"魔法"宏，它触发 **MOC（元对象编译器）** 自动生成信号槽的胶水代码。
+`unique_ptr` 析构时需要知道 `Ui::LoginWindow` 的完整大小，而头文件里只有前向声明——**编译器无法生成默认析构函数**。
 
-**少了 Q_OBJECT 会怎样**？`connect()` 仍然能编译，但信号不会触发槽函数，或者出现 `undefined reference to vtable` 链接错误。
+解决方案：在头文件**声明** `~LoginWindow()`，在 `.cpp`（已包含完整定义）**定义**为 `= default`：
 
-**`client/src/ui/login_window.h`** 完整代码：
+```cpp
+// login_window.h
+~LoginWindow() override;       // 声明，阻止编译器 inline 生成
+
+// login_window.cpp
+LoginWindow::~LoginWindow() = default;   // 此处 Ui::LoginWindow 已完整
+```
+
+### 5.3.3 完整头文件
+
+**`client/src/ui/login_window.h`**：
 
 ```cpp
 #pragma once
 
 #include <QWidget>
+#include <memory>
 
-// 前向声明：告诉编译器这些类存在，但不包含完整头文件
-class QTabWidget;
-class QLineEdit;
-class QPushButton;
-class QLabel;
-class QVBoxLayout;
+QT_BEGIN_NAMESPACE
+namespace Ui { class LoginWindow; }   // 前向声明
+QT_END_NAMESPACE
 
 class LoginWindow : public QWidget {
     Q_OBJECT
 
 public:
     explicit LoginWindow(QWidget* parent = nullptr);
-    ~LoginWindow() override = default;
+    ~LoginWindow() override;
 
 private slots:
     void onLoginClicked();
     void onRegisterClicked();
+    void toggleLoginPwdVisibility();
+    void toggleRegPwdVisibility();
+    void toggleRegConfirmVisibility();
 
 private:
-    void setupUi();
     void setupStyle();
     void connectSignals();
+    void resetLoginBtn();
+    void resetRegBtn();
 
-    // Tab 容器
-    QTabWidget* tab_widget_;
-
-    // 登录 Tab
-    QLineEdit*   login_username_edit_;
-    QLineEdit*   login_password_edit_;
-    QPushButton* login_btn_;
-    QLabel*      login_status_label_;
-
-    // 注册 Tab
-    QLineEdit*   reg_username_edit_;
-    QLineEdit*   reg_display_name_edit_;
-    QLineEdit*   reg_password_edit_;
-    QLineEdit*   reg_confirm_edit_;
-    QPushButton* reg_btn_;
-    QLabel*      reg_status_label_;
-
-    // 底部服务器状态栏
-    QLabel* server_dot_label_;
-    QLabel* server_addr_label_;
+    std::unique_ptr<Ui::LoginWindow> ui_;
 };
 ```
 
 ---
 
-## 5.4 布局系统详解
+## 5.4 布局结构
 
-Qt 布局系统是理解 UI 代码的关键。
-
-### 5.4.1 三种核心布局
-
-| 布局类 | 排列方向 | 典型用途 |
-|--------|---------|---------|
-| `QVBoxLayout` | 垂直（从上到下） | 表单字段、页面主体 |
-| `QHBoxLayout` | 水平（从左到右） | 工具栏、并排按钮 |
-| `QGridLayout` | 网格（行列） | 复杂表单 |
-
-### 5.4.2 布局的嵌套关系
+`.ui` 文件描述以下控件树：
 
 ```
-LoginWindow（QWidget，宽 400px，背景 #F4F6F8）
-└── main_layout（QVBoxLayout，外边距 40px）
-    └── card（QWidget，白色背景，圆角 16px）
-        └── card_layout（QVBoxLayout，内边距 32px，间距 24px）
-            ├── header_widget（QWidget）
-            │   └── header_layout（QHBoxLayout）
-            │       ├── icon_label（QLabel "💬"）
-            │       └── title_widget（QWidget）
-            │           └── title_layout（QVBoxLayout）
-            │               ├── app_name_label（"CloudVault"）
-            │               └── subtitle_label（"即时通讯 · 文件传输"）
-            ├── tab_widget_（QTabWidget）
+LoginWindow（QWidget，最小 400×560）
+└── mainLayout（QVBoxLayout，外边距 40/40/40/32）
+    └── card（QWidget，透明）
+        └── cardLayout（QVBoxLayout，间距 20）
+            ├── headerWidget（QHBoxLayout）
+            │   ├── iconLabel（QLabel，40×40，显示应用图标）
+            │   └── titleWidget
+            │       ├── appNameLabel（"CloudVault"）
+            │       └── appSubtitleLabel（"即时通讯 · 文件传输"）
+            ├── tabWidget（QTabWidget）
             │   ├── Tab「登录」（QVBoxLayout）
             │   │   ├── 用户名标签 + 输入框
-            │   │   ├── 密码标签 + 输入框
-            │   │   ├── login_status_label_（隐藏）
-            │   │   └── login_btn_
+            │   │   ├── 密码标签 + [输入框 | 显示按钮]（QHBoxLayout）
+            │   │   ├── loginStatusLabel（错误提示，初始隐藏）
+            │   │   └── loginBtn
             │   └── Tab「注册」（QVBoxLayout）
-            │       ├── name_row（QHBoxLayout：用户名 + 昵称并排）
-            │       ├── 密码标签 + 输入框
-            │       ├── 确认密码标签 + 输入框
-            │       ├── reg_status_label_（隐藏）
-            │       └── reg_btn_
-            └── status_frame（QWidget，底部状态栏）
-                └── status_layout（QHBoxLayout）
-                    ├── server_dot_label_（"●"）
-                    └── server_addr_label_（"127.0.0.1:5000 · 已就绪"）
-```
-
-### 5.4.3 关键方法说明
-
-```cpp
-// 设置布局与边缘的距离（左, 上, 右, 下）
-layout->setContentsMargins(32, 32, 32, 32);
-
-// 设置子控件之间的间距
-layout->setSpacing(24);
-
-// 添加弹性空间：把内容推向一侧，另一侧留空
-layout->addStretch();
-
-// 添加固定间距（px）
-layout->addSpacing(8);
+            │       ├── [用户名输入框 | 昵称输入框]（QHBoxLayout）
+            │       ├── 密码标签 + [输入框 | 显示按钮]
+            │       ├── 确认密码标签 + [输入框 | 显示按钮]
+            │       ├── regStatusLabel（初始隐藏）
+            │       └── regBtn
+            └── statusFrame（QWidget，底部服务器状态栏）
+                ├── serverDotLabel（"●"）
+                └── serverAddrLabel（"127.0.0.1:5000 · 已就绪"）
 ```
 
 ---
 
-## 5.5 QSS 样式表
+## 5.5 QSS 主题系统
 
 ### 5.5.1 QSS vs CSS
 
@@ -252,93 +229,187 @@ QSS 语法与 CSS 非常相似，但有区别：
 
 | 特性 | CSS | QSS |
 |------|-----|-----|
-| CSS 变量 | `var(--color)` | ❌ 不支持，需硬编码 |
+| CSS 变量 | `var(--color)` | ❌ 不支持 |
 | 类选择器 | `.className` | `ClassName`（类名本身） |
-| ID 选择器 | `#id` | `#objectName`（需 `setObjectName()`）|
-| 伪类 | `:hover` `:focus` | ✅ 支持（语法相同） |
-| box-shadow | ✅ 支持 | ❌ 不支持 |
+| ID 选择器 | `#id` | `#objectName` |
+| 伪类 | `:hover` `:focus` | ✅ 支持 |
+| box-shadow | ✅ | ❌ |
 
 ### 5.5.2 objectName 的作用
 
 ```cpp
-// 代码中设置
-card->setObjectName("card");
+// QSS 中精确匹配某个控件
+QWidget#card { background: white; }    // 只匹配 objectName="card" 的 QWidget
+QWidget { background: white; }         // ❌ 匹配所有 QWidget，样式污染
+```
 
-// QSS 中精确匹配
-QWidget#card {
-    background: white;
-    border-radius: 16px;
+### 5.5.3 @token 主题常量系统
+
+QSS 不支持 CSS 变量，但我们可以用 **C++ 常量 + 字符串替换** 模拟：
+
+```cpp
+// login_window.cpp 顶部，单一可信来源
+namespace {
+const QPair<const char*, const char*> kTheme[] = {
+    {"@bgPage",         "#F4F6F8"},  // 页面背景
+    {"@bgField",        "#F0F2F5"},  // 输入框背景
+    {"@accent",         "#3B82F6"},  // 品牌蓝
+    {"@accentHover",    "#2563EB"},  // 品牌蓝悬停
+    {"@error",          "#EF4444"},  // 错误红
+    // ...
+};
 }
 ```
 
-如果不用 `objectName`，`QWidget { ... }` 会匹配**所有** QWidget，导致样式污染。
+```cpp
+void LoginWindow::setupStyle() {
+    QString qss = QStringLiteral(R"(
+        LoginWindow { background-color: @bgPage; }
+        QPushButton#loginBtn { background: @accent; }
+        QPushButton#loginBtn:hover { background: @accentHover; }
+        ...
+    )");
 
-### 5.5.3 色彩系统（来自 ui-flow.md）
+    // 将 @token 替换为实际颜色值
+    for (const auto& [token, value] : kTheme) {
+        qss.replace(QLatin1String(token), QLatin1String(value));
+    }
+    setStyleSheet(qss);
+}
+```
 
-| 变量名（含义） | 色值 | 用途 |
-|-------------|------|------|
-| accent | `#3B82F6` | 按钮、选中 Tab、聚焦边框 |
-| bg | `#F4F6F8` | 窗口背景 |
-| surface | `#FFFFFF` | 卡片背景 |
-| surface2 | `#F0F2F5` | 输入框背景、状态栏背景 |
-| border | `#E2E6EA` | 输入框边框 |
-| text | `#111827` | 主要文字 |
-| text2 | `#6B7280` | 次级文字、标签 |
-| danger | `#EF4444` | 错误提示 |
-| success | `#22C55E` | 服务器在线圆点 |
+**好处**：修改主题只需改 `kTheme` 表，QSS 模板不动。
+
+### 5.5.4 色彩语义表
+
+| Token | 色值 | 语义 |
+|-------|------|------|
+| `@bgPage` | `#F4F6F8` | 窗口背景 |
+| `@bgField` | `#F0F2F5` | 输入框背景 |
+| `@bgFieldFocus` | `#FFFFFF` | 输入框聚焦背景 |
+| `@border` | `#E2E6EA` | 默认边框 |
+| `@txtPrimary` | `#111827` | 主文字 |
+| `@txtSecondary` | `#6B7280` | 次要文字 |
+| `@accent` | `#3B82F6` | 品牌蓝（按钮/高亮） |
+| `@accentHover` | `#2563EB` | 品牌蓝悬停 |
+| `@accentDisabled` | `#93C5FD` | 品牌蓝禁用 |
+| `@error` | `#EF4444` | 错误红 |
+| `@statusBg` | `#F0FDF4` | 状态栏背景（绿） |
+| `@statusDot` | `#16A34A` | 在线状态点 |
 
 ---
 
-## 5.6 信号槽机制
+## 5.6 应用图标与资源文件
 
-### 5.6.1 基本概念
+### 5.6.1 Qt 资源系统（.qrc）
+
+图片、图标等静态资源通过 `.qrc` 文件编译进可执行文件，不依赖外部路径：
+
+**`client/resources/resources.qrc`**：
+
+```xml
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource prefix="/icons">
+        <file>icons/app_icon.png</file>
+    </qresource>
+</RCC>
+```
+
+运行时通过 `:/icons/app_icon.png` 访问（`:/` 是 Qt 资源系统的虚拟根路径）。
+
+`CMAKE_AUTORCC ON` 会自动检测 `.qrc` 并编译。**添加新的 `.qrc` 文件后需要 Reload CMake Project**。
+
+### 5.6.2 在代码中使用图标
+
+```cpp
+// main.cpp：设置任务栏/标题栏图标
+app.setWindowIcon(QIcon(":/icons/app_icon.png"));
+
+// login_window.cpp：设置 header 里的图标标签
+ui_->iconLabel->setPixmap(QPixmap(":/icons/app_icon.png"));
+```
+
+> ⚠️ 不要在 `.ui` 文件的 `<pixmap>` 属性里引用资源，设计时方便但运行时不可靠。改在代码里显式加载。
+
+---
+
+## 5.7 信号槽机制
+
+### 5.7.1 基本概念
 
 - **信号（Signal）**：事件发生时发出的通知，如 `QPushButton::clicked`
-- **槽（Slot）**：响应信号的函数，可以是任何普通函数或成员函数
+- **槽（Slot）**：响应信号的函数
 - **connect()**：把信号和槽连接起来
 
 ```cpp
-// 新式语法（Qt5+）：编译期类型检查，推荐使用
-connect(发送者, &发送者类::信号,
-        接收者, &接收者类::槽);
-
-// 示例
-connect(login_btn_, &QPushButton::clicked,
+// 新式语法（Qt5+）：编译期类型检查
+connect(ui_->loginBtn, &QPushButton::clicked,
         this, &LoginWindow::onLoginClicked);
+
+// 信号参数可以多于槽参数，多余的参数被丢弃
+connect(ui_->loginPwdToggleBtn, &QPushButton::toggled,   // toggled(bool)
+        this, &LoginWindow::toggleLoginPwdVisibility);    // 无参数槽，bool 被丢弃
 ```
 
-### 5.6.2 为什么需要 Q_OBJECT？
+### 5.7.2 为什么需要 Q_OBJECT？
 
-Qt 的信号槽不是标准 C++ 的一部分，需要 **MOC**（Meta-Object Compiler）在编译前生成额外的 C++ 代码。`Q_OBJECT` 宏告诉 MOC "这个类需要处理"。
+Qt 的信号槽不是标准 C++，需要 **MOC**（Meta-Object Compiler）在编译前生成额外代码。`Q_OBJECT` 宏告诉 MOC "这个类需要处理"。
 
-CMake 的 `AUTOMOC ON`（在 `client/CMakeLists.txt` 中设置）会自动检测 `Q_OBJECT` 并运行 MOC。
+`CMAKE_AUTOMOC ON` 会自动检测 `Q_OBJECT` 并运行 MOC。
 
 ---
 
-## 5.7 登录/注册校验逻辑
+## 5.8 密码显示/隐藏
 
-### 5.7.1 onLoginClicked() 流程
+每个密码框右侧有一个可勾选按钮，点击切换明文/密文：
+
+```cpp
+// .ui 文件：密码框行布局（QHBoxLayout）
+// [QLineEdit loginPasswordEdit] [QPushButton loginPwdToggleBtn checkable=true]
+
+void LoginWindow::toggleLoginPwdVisibility() {
+    const bool show = ui_->loginPwdToggleBtn->isChecked();
+    ui_->loginPasswordEdit->setEchoMode(
+        show ? QLineEdit::Normal : QLineEdit::Password);
+    ui_->loginPwdToggleBtn->setText(show ? "隐藏" : "显示");
+}
+```
+
+注册 Tab 的两个密码框同理（`regPwdToggleBtn`、`regConfirmToggleBtn`）。
+
+---
+
+## 5.9 登录/注册校验逻辑
+
+### 5.9.1 onLoginClicked() 流程
 
 ```
-读取输入（trimmed 去空白）
+读取输入（username.trimmed()，password 原值保留）
       │
       ▼
-  任一为空？ ──是──▶ 显示 "用户名和密码不能为空" → return
+  username 为空 或 password.trimmed() 为空？
+  ──是──▶ 显示 "用户名和密码不能为空" → return
       │否
       ▼
   禁用按钮，改文字为 "登录中…"
       │
       ▼
-  qDebug() 输出（第六章替换为 AuthService::login()）
+  qCDebug(lcLogin) 输出
+  TODO（第六章）：AuthService::login(username, password)
+  当前占位：直接调用 resetLoginBtn() 恢复按钮
 ```
 
-### 5.7.2 onRegisterClicked() 流程
+> **密码为何不做 `trimmed()`？**
+> 密码前后的空格可能是有意设置的，不应裁剪。但用 `password.trimmed().isEmpty()` 检测"仅含空格"的无效输入。
+
+### 5.9.2 onRegisterClicked() 流程
 
 ```
 读取四个字段
       │
       ▼
-  任一为空？ ──是──▶ "所有字段均为必填项" → return
+  任一字段 trimmed() 为空？ ──是──▶ "所有字段均为必填项" → return
       │否
       ▼
   用户名长度 3–20？ ──否──▶ 提示 → return
@@ -353,114 +424,110 @@ CMake 的 `AUTOMOC ON`（在 `client/CMakeLists.txt` 中设置）会自动检测
   禁用按钮，改文字为 "注册中…"
       │
       ▼
-  qDebug() 输出（第六章替换为 AuthService::registerUser()）
+  TODO（第六章）：AuthService::registerUser(username, display_name, password)
 ```
+
+### 5.9.3 按钮状态恢复
+
+第六章接入 `AuthService` 后，`resetLoginBtn()` / `resetRegBtn()` 会在服务回调（`onLoginFailed` / `onRegisterFailed`）中调用。本章暂时在 TODO 后直接调用作为占位。
 
 ---
 
-## 5.8 完整代码
+## 5.10 结构化日志
 
-### `client/src/main.cpp`
+不用 `qDebug()`，改用分类日志，可按需开关：
 
 ```cpp
-#include <QApplication>
-#include <QScreen>
-#include "ui/login_window.h"
+// login_window.cpp 顶部
+Q_LOGGING_CATEGORY(lcLogin, "ui.login")
 
-int main(int argc, char* argv[]) {
-    // QApplication 必须是第一个创建的 Qt 对象
-    QApplication app(argc, argv);
-
-    app.setApplicationName("CloudVault");
-    app.setApplicationVersion("2.0");
-    app.setOrganizationName("CloudVault");
-
-    LoginWindow window;
-
-    // 居中显示：availableGeometry() 返回去掉任务栏的可用区域
-    const QRect screen_geo = QGuiApplication::primaryScreen()->availableGeometry();
-    window.move(screen_geo.center() - window.rect().center());
-
-    window.show();
-    return app.exec();  // 启动事件循环，阻塞直到窗口关闭
-}
+// 使用
+qCDebug(lcLogin) << "准备登录：用户名 =" << username;
 ```
 
-### `client/src/ui/login_window.h`
+运行时启用：
 
-见 §5.3.2 的完整代码。
+```bash
+# 环境变量方式
+QT_LOGGING_RULES="ui.login=true" ./cloudvault_client
 
-### `client/src/ui/login_window.cpp`
-
-见项目文件 `client/src/ui/login_window.cpp`（带逐行注释）。
+# 或在 main.cpp 中代码控制
+QLoggingCategory::setFilterRules("ui.login=true");
+```
 
 ---
 
-## 5.9 在 CLion 中运行
+## 5.11 在 CLion 中运行
 
-### 5.9.1 首次配置
+### 5.11.1 首次配置
 
-1. 打开 CLion，选择 **File → Open**，打开项目根目录（包含顶层 `CMakeLists.txt`）
-2. CLion 会自动检测 CMake 并开始配置
-3. 若配置失败，检查：
-   - **Settings → Build, Execution, Deployment → CMake** 中确认 Generator 为 `Ninja` 或 `Unix Makefiles`
-   - `cmake-build-debug/` 目录已被 `.gitignore` 排除
+1. 打开 CLion，选择 **File → Open**，打开 `client/` 目录
+2. CLion 自动检测 `client/CMakeLists.txt` 并开始配置
+3. 若配置失败，检查 **Settings → Build → CMake** 中 Qt6_DIR 是否正确
 
-### 5.9.2 设置 Qt6 路径（若找不到 Qt）
+### 5.11.2 设置 Qt6 路径
 
 CLion → Settings → Build → CMake → CMake options，添加：
 
 ```
--DCMAKE_PREFIX_PATH=/path/to/Qt/6.x.x/gcc_64
+-DQt6_DIR=C:/Qt/6.x.x/msvc2022_64/lib/cmake/Qt6
 ```
 
-WSL 中 Qt 通常安装在 `~/Qt/6.x.x/gcc_64`。
+### 5.11.3 添加新资源文件后
 
-### 5.9.3 选择运行目标
+每次新增 `.qrc` 或 `.ui` 文件，需要：
+
+**File → Reload CMake Project**（让 `GLOB_RECURSE` 重新扫描）
+
+### 5.11.4 选择运行目标
 
 工具栏下拉菜单选择 `cloudvault_client`，点击绿色 Run 按钮（或 `Shift+F10`）。
 
-正常输出：
+正常结果：
 ```
-CloudVault 登录窗口应弹出，宽约 400px
-切换 Tab、输入内容、点击按钮均正常响应
-控制台输出：[LoginWindow] 准备登录：用户名 = xxx
+CloudVault 登录窗口弹出，宽约 400px
+Tab 可切换，密码框右侧有"显示"按钮
+应用图标显示在标题栏和任务栏
+控制台无报错（qCDebug 默认不输出）
 ```
 
 ---
 
-## 5.10 踩坑记录
+## 5.12 踩坑记录
 
 ### 坑 1：`undefined reference to vtable for LoginWindow`
 
-**原因**：`Q_OBJECT` 宏存在但 MOC 没有运行，生成的 `moc_login_window.cpp` 缺失。
+**原因**：`Q_OBJECT` 宏存在但 MOC 没有运行。
 
-**解决**：
-1. 确认 `client/CMakeLists.txt` 中有 `set(CMAKE_AUTOMOC ON)`
-2. 清空 `cmake-build-debug/` 目录，重新配置
+**解决**：确认 `CMakeLists.txt` 中有 `set(CMAKE_AUTOMOC ON)`，清空 `cmake-build-debug/` 重新配置。
 
-### 坑 2：窗口样式全部丢失（QSS 不生效）
+### 坑 2：窗口样式全部丢失
 
-**原因**：`setObjectName()` 和 QSS 中的 `#objectName` 拼写不一致。
+**原因**：`objectName` 和 QSS 中的 `#objectName` 拼写不一致（大小写敏感）。
 
-**解决**：对照检查代码中 `setObjectName("xxx")` 和 QSS 中 `#xxx` 是否完全匹配（大小写敏感）。
+**解决**：对照 `.ui` 文件中的 `objectName` 属性和 QSS 选择器。
 
-### 坑 3：密码框内容可见
+### 坑 3：图标加载不出来
 
-**原因**：忘记设置 `setEchoMode(QLineEdit::Password)`。
+**原因**：新增 `.qrc` 后没有 Reload CMake Project，资源未编译进可执行文件。
 
-**解决**：在 `setupUi()` 中对所有密码输入框调用此方法。
+**解决**：File → Reload CMake Project → Rebuild。另外，图标应在代码中通过 `QPixmap(":/icons/app_icon.png")` 加载，不要依赖 `.ui` 文件的 `<pixmap>` 属性。
 
-### 坑 4：`QGuiApplication::primaryScreen()` 返回 nullptr（WSL2）
+### 坑 4：`unique_ptr` 报 incomplete type 错误
+
+**原因**：`~LoginWindow()` 的默认实现被编译器 inline 生成在头文件，此时 `Ui::LoginWindow` 还是前向声明（不完整类型）。
+
+**解决**：在头文件声明 `~LoginWindow() override;`，在 `.cpp`（已包含 `ui_login_window.h`）定义为 `= default`。
+
+### 坑 5：`QGuiApplication::primaryScreen()` 返回 nullptr（WSL2）
 
 **原因**：WSL2 没有连接显示器时 Qt 无法获取屏幕信息。
 
-**解决**：在 `window.move()` 前加空指针检查：
+**解决**：
 
 ```cpp
 if (auto* screen = QGuiApplication::primaryScreen()) {
-    const QRect geo = screen->availableGeometry();
-    window.move(geo.center() - window.rect().center());
+    window.move(screen->availableGeometry().center() - window.rect().center());
 }
 ```
 
@@ -468,11 +535,13 @@ if (auto* screen = QGuiApplication::primaryScreen()) {
 
 ## 本章新知识点
 
-- **QWidget 布局系统**：QVBoxLayout / QHBoxLayout 嵌套，setContentsMargins / setSpacing / addStretch
-- **Qt parent-child 内存管理**：为什么控件用指针，为什么不需要手动 delete
-- **QSS 样式表**：objectName 选择器、伪类（:focus / :hover / :disabled）、与 CSS 的区别
-- **信号槽新式语法**：`connect(&Sender::signal, &Receiver::slot)`，编译期类型检查
-- **Q_OBJECT 与 AUTOMOC**：MOC 如何被 CMake 自动触发
+- **AUTOUIC**：`.ui` 文件转 `ui_*.h`，`setupUi(this)` 替代手写布局
+- **unique_ptr + 前向声明**：析构函数必须在完整类型可见处定义
+- **Qt 资源系统**：`.qrc` + `AUTORCC`，`:/prefix/file` 虚拟路径
+- **@token 主题系统**：C++ 常量 + 字符串替换模拟 CSS 变量
+- **分类日志**：`Q_LOGGING_CATEGORY` / `qCDebug()`，按需开关
+- **信号槽参数兼容**：槽的参数可少于信号，多余参数被丢弃
+- **QSS 伪类**：`:hover` / `:focus` / `:disabled` / `:checked`
 
 ---
 
