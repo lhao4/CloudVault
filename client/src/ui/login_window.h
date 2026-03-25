@@ -10,6 +10,9 @@
 
 #pragma once
 
+#include "network/tcp_client.h"
+#include "network/response_router.h"
+
 #include <QWidget>
 #include <memory>
 
@@ -33,11 +36,22 @@ private slots:
     void toggleRegPwdVisibility();      // 注册密码显示/隐藏
     void toggleRegConfirmVisibility();  // 确认密码显示/隐藏
 
+    // 网络事件槽
+    void onServerConnected();
+    void onServerDisconnected();
+    void onServerError(const QString& message);
+
 private:
-    void setupStyle();      // 应用 QSS 样式表
-    void connectSignals();  // 绑定信号槽
-    void resetLoginBtn();   // 恢复登录按钮为可点击状态
-    void resetRegBtn();     // 恢复注册按钮为可点击状态
+    void setupStyle();        // 应用 QSS 样式表
+    void connectSignals();    // 绑定信号槽
+    void resetLoginBtn();     // 恢复登录按钮为可点击状态
+    void resetRegBtn();       // 恢复注册按钮为可点击状态
+    void setupNetwork();      // 初始化网络层并连接服务器
+    void registerHandlers();  // 注册 PDU 响应处理器
 
     std::unique_ptr<Ui::LoginWindow> ui_;  // RAII 管理，析构时自动释放
+
+    // 网络层（第七章）
+    cloudvault::TcpClient     tcp_client_;
+    cloudvault::ResponseRouter router_;
 };
