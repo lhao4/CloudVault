@@ -21,35 +21,16 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# ── FetchContent：自动下载第三方库 ───────────────────────
-# FetchContent 是 CMake 3.14+ 内置的依赖管理方案。
-# 原理：在 cmake 配置阶段（非编译阶段）从 Git 下载源码，
-#       然后像本地子目录一样参与构建。
-# 优点：不需要用户手动安装这些库，clone 项目后直接 cmake 即可。
-# 缺点：首次配置需要联网，速度取决于网络。
-include(FetchContent)
+# ── 第三方库（系统包）────────────────────────────────────
+# 使用系统安装的包，无需联网下载。
+# 安装命令：
+#   sudo apt install libspdlog-dev nlohmann-json3-dev
+#
+# spdlog：高性能异步日志库
+find_package(spdlog REQUIRED)
 
-# ── spdlog（日志库）──────────────────────────────────────
-# GIT_TAG 指定版本，保证所有人用同一个版本，避免版本差异导致的问题。
-# 建议：每隔一段时间更新 GIT_TAG 到最新稳定版。
-FetchContent_Declare(
-    spdlog
-    GIT_REPOSITORY https://github.com/gabime/spdlog.git
-    GIT_TAG        v1.14.1
-)
-
-# ── nlohmann/json（JSON 解析库）──────────────────────────
-# 用于读取 server.json 配置文件。
-# header-only 库，所以编译极快。
-FetchContent_Declare(
-    nlohmann_json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG        v3.11.3
-)
-
-# FetchContent_MakeAvailable()：让上面声明的所有库可用。
-# 可以批量写在一起，CMake 会并行处理。
-FetchContent_MakeAvailable(spdlog nlohmann_json)
+# nlohmann/json：header-only JSON 解析库，用于读取 server.json
+find_package(nlohmann_json REQUIRED)
 
 # ── 系统库查找 ────────────────────────────────────────────
 # OpenSSL：TLS 加密 + SHA-256
@@ -63,8 +44,9 @@ find_package(Threads REQUIRED)
 # MySQL：自定义查找模块（见 cmake/FindMySQL.cmake）
 # 安装：sudo apt install libmysqlclient-dev
 # CMAKE_MODULE_PATH：告诉 CMake 去哪里找自定义 Find 模块。
+# 第八章实现数据库层前标记为 OPTIONAL，骨架阶段可不安装。
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake")
-find_package(MySQL REQUIRED)
+find_package(MySQL)   # TODO（第八章）：改回 REQUIRED
 
 # ── 引入 common 静态库 ────────────────────────────────────
 # add_subdirectory()：将另一个目录的 CMakeLists.txt 纳入当前构建系统。
@@ -104,14 +86,19 @@ target_include_directories(cloudvault_server
 # cloudvault_common 链接后，OpenSSL::Crypto 也会自动传递过来（因为 common 声明为 PUBLIC）。
 target_link_libraries(cloudvault_server
     PRIVATE
-        cloudvault_common        # 共享协议库
-        spdlog::spdlog          # 日志
+        cloudvault_common             # 共享协议库
+        spdlog::spdlog               # 日志
         nlohmann_json::nlohmann_json  # JSON 解析
-        OpenSSL::SSL            # TLS
-        OpenSSL::Crypto         # SHA-256（common 已 PUBLIC 传递，此处显式写出便于阅读）
-        MySQL::MySQL            # 数据库客户端
-        Threads::Threads        # std::thread / pthread
+        OpenSSL::SSL                  # TLS
+        OpenSSL::Crypto               # SHA-256
+        Threads::Threads              # std::thread / pthread
 )
+
+# MySQL 在第八章实现数据库层后才需要链接
+if(MySQL_FOUND)
+    target_link_libraries(cloudvault_server PRIVATE MySQL::MySQL)
+    target_compile_definitions(cloudvault_server PRIVATE HAVE_MYSQL)
+endif()
 
 # ── 编译选项 ─────────────────────────────────────────────
 # 为 server target 单独开启严格警告。
