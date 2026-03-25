@@ -14,11 +14,11 @@
 | [第二章　技术选型与架构概览](ch02-tech-stack.md) | 技术栈决策、高层架构、模块边界 | ✅ 已完成 |
 | [第三章　开发环境搭建](ch03-environment.md) | Linux/Windows 环境、工具安装与验证 | ✅ 已完成 |
 | [第四章　工程初始化与 CMake 配置](ch04-cmake.md) | 项目骨架、构建系统、首次编译 | ✅ 已完成 |
-| [第五章　两端骨架——让程序先跑起来](ch05-skeleton.md) | 服务端最小启动 + 客户端登录窗可运行 | ✅ 待写 |
-| [第六章　协议基础——PDU 与 common 层](ch06-protocol.md) | PDU、粘包拆包、crypto 与单测 | ✅ 待写 |
-| [第七章　建立连接——PING/PONG 联通](ch07-ping-pong.md) | TcpServer/TcpClient 联通与日志验证 | ✅ 待写 |
-| [第八章　注册与登录](ch08-auth.md) | MySQL + AuthHandler + AuthService 闭环 | 🔲 待写 |
-| [第九章　好友功能](ch09-friend.md) | 搜索/添加/列表/删除好友 | 🔲 待写 |
+| [第五章　两端骨架——让程序先跑起来](ch05-skeleton.md) | 服务端最小启动 + 客户端登录窗可运行 | ✅ 已完成 |
+| [第六章　协议基础——PDU 与 common 层](ch06-protocol.md) | PDU、粘包拆包、crypto 与单测 | ✅ 已完成 |
+| [第七章　建立连接——PING/PONG 联通](ch07-ping-pong.md) | TcpServer/TcpClient 联通与日志验证 | ✅ 已完成 |
+| [第八章　注册与登录](ch08-auth.md) | MySQL + AuthHandler + AuthService 闭环 | ✅ 已完成 |
+| [第九章　好友功能](ch09-friend.md) | 搜索/添加/列表/删除好友 | ✅ 已完成 |
 | [第十章　即时聊天](ch10-chat.md) | 在线聊天与离线消息 | 🔲 待写 |
 | [第十一章　文件管理](ch11-file-manager.md) | 目录与文件基础管理能力 | 🔲 待写 |
 | [第十二章　文件传输（上传与下载）](ch12-file-transfer.md) | 分片上传下载与进度反馈 | 🔲 待写 |
