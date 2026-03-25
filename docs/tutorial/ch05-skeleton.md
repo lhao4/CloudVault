@@ -1,14 +1,17 @@
-# 第五章　客户端骨架——登录窗口
+# 第五章　项目骨架——客户端登录窗口与服务端最小运行
 
 > **状态**：✅ 已完成
 >
 > **本章目标**：
 >
-> 1. 解决 CMake 配置报错，让 CLion 成功加载项目
+> 1. 解决 CMake 配置报错，让 CLion 成功加载客户端项目
 > 2. 用 Qt Designer `.ui` 文件实现 `LoginWindow`：带样式的登录/注册双 Tab 窗口
 > 3. 本地字段校验、密码显示/隐藏、应用图标（不接网络，第六章再接入）
+> 4. 搭建服务端骨架：读取 JSON 配置、初始化 spdlog、优雅处理 SIGINT/SIGTERM
 >
-> **验收标准**：CLion 点击 Run → 弹出登录窗口，Tab 可切换，校验逻辑正常。
+> **验收标准（客户端）**：CLion 点击 Run → 弹出登录窗口，Tab 可切换，校验逻辑正常。
+>
+> **验收标准（服务端）**：WSL 终端运行 `./cloudvault_server` → 打印启动横幅 → `Ctrl+C` 优雅退出。
 
 ---
 
@@ -533,7 +536,277 @@ if (auto* screen = QGuiApplication::primaryScreen()) {
 
 ---
 
+---
+
+## 5.13 服务端骨架（WSL 编译运行）
+
+### 5.13.1 设计目标
+
+服务端骨架和客户端骨架遵循同一原则：**能编译、能运行、结构完整，业务逻辑留 TODO**。
+
+本章服务端骨架实现：
+- 读取 JSON 配置文件（nlohmann/json）
+- 初始化 spdlog（控制台 + 轮转文件双 sink）
+- 打印启动横幅
+- 捕获 SIGINT / SIGTERM，优雅关闭
+
+### 5.13.2 项目结构
+
+```
+server/
+├── CMakeLists.txt
+├── config/
+│   └── server.example.json   # 配置模板（server.json 被 gitignore）
+├── include/server/
+│   ├── server_app.h          # 本章实现
+│   ├── event_loop.h          # TODO（第七章）
+│   ├── tcp_server.h          # TODO（第七章）
+│   ├── thread_pool.h         # TODO（第七章）
+│   ├── session_manager.h     # TODO（第八章）
+│   ├── message_dispatcher.h  # TODO（第八章）
+│   ├── file_storage.h        # TODO（第十一章）
+│   ├── db/
+│   │   ├── database.h        # TODO（第八章）
+│   │   ├── user_repository.h # TODO（第八章）
+│   │   └── friend_repository.h
+│   └── handler/
+│       ├── auth_handler.h    # TODO（第九章）
+│       ├── friend_handler.h  # TODO（第九章）
+│       ├── chat_handler.h    # TODO（第十章）
+│       └── file_handler.h    # TODO（第十一章）
+└── src/
+    ├── main.cpp
+    └── server_app.cpp        # 本章实现
+```
+
+所有 `TODO` 头文件目前只有 `#pragma once`，作用是让 IDE 的代码补全能感知到整体架构。
+
+### 5.13.3 CMake：系统包替代 FetchContent
+
+WSL 下 `FetchContent` 需要联网，在 `/mnt/d/`（NTFS 挂载）上还会遇到权限问题。改用系统包：
+
+```bash
+sudo apt install -y libspdlog-dev nlohmann-json3-dev libssl-dev libgtest-dev
+```
+
+`server/CMakeLists.txt` 关键配置：
+
+```cmake
+# 系统包，无需联网
+find_package(spdlog        REQUIRED)
+find_package(nlohmann_json REQUIRED)
+find_package(OpenSSL       REQUIRED)
+
+# MySQL 骨架阶段可选，第八章改回 REQUIRED
+find_package(MySQL)
+if(MySQL_FOUND)
+    target_link_libraries(cloudvault_server PRIVATE MySQL::MySQL)
+    target_compile_definitions(cloudvault_server PRIVATE HAVE_MYSQL)
+endif()
+```
+
+测试子目录同理，`find_package(GTest REQUIRED)` + 空源文件守卫：
+
+```cmake
+find_package(GTest REQUIRED)
+
+file(GLOB_RECURSE TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
+if(NOT TEST_SOURCES)
+    message(STATUS "cloudvault_server_tests: 暂无测试文件，跳过构建")
+    return()
+endif()
+```
+
+### 5.13.4 ServerApp 头文件
+
+**`server/include/server/server_app.h`**：
+
+```cpp
+#pragma once
+#include <string>
+
+class ServerApp {
+public:
+    ServerApp();
+    ~ServerApp();
+
+    // 加载配置、初始化日志；失败返回 false
+    bool init(const std::string& config_path);
+
+    // 启动服务，阻塞直到收到 SIGINT / SIGTERM
+    void run();
+
+private:
+    void shutdown();
+    bool initialized_ = false;
+};
+```
+
+设计要点：
+- `init()` 和 `run()` 分离——方便后续在 `init()` 后插入健康检查再调用 `run()`
+- `initialized_` 标志让 `shutdown()` 做到**幂等**（析构和信号都可能触发）
+
+### 5.13.5 配置文件（nlohmann/json）
+
+**`server/config/server.example.json`**：
+
+```json
+{
+    "server":   { "host": "0.0.0.0", "port": 5000, "thread_count": 8 },
+    "database": { "host": "127.0.0.1", "port": 3306, "name": "cloudvault",
+                  "user": "cloudvault_app", "password_env": "CLOUDVAULT_DB_PASSWORD" },
+    "storage":  { "root": "/data/cloudvault/filesys" },
+    "tls":      { "cert": "/etc/cloudvault/cert.pem", "key": "/etc/cloudvault/key.pem" },
+    "log":      { "level": "info", "file": "logs/server.log" }
+}
+```
+
+> `server.json` 写入 `.gitignore`，避免把本地路径和密码提交进仓库。仓库只保留 `server.example.json`。
+
+读取时用 `json::json_pointer` 安全访问嵌套键——键不存在时返回默认值，不会抛异常：
+
+```cpp
+using jp = json::json_pointer;
+const int port = cfg.value(jp("/server/port"), 5000);
+```
+
+### 5.13.6 spdlog：控制台 + 轮转文件双 sink
+
+```cpp
+// 确保日志目录存在（运行时创建，不提交 logs/ 到 git）
+std::filesystem::create_directories(
+    std::filesystem::path(log_file).parent_path());
+
+auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+auto file_sink    = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+    log_file,
+    10 * 1024 * 1024,   // 单文件上限 10 MB
+    3                   // 最多保留 3 个轮转文件
+);
+
+auto logger = std::make_shared<spdlog::logger>(
+    "server",
+    spdlog::sinks_init_list{console_sink, file_sink}
+);
+logger->set_level(spdlog::level::from_str(log_level));
+logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%-5l%$] [tid %t] %v");
+spdlog::set_default_logger(logger);
+```
+
+`set_default_logger()` 之后，代码里直接用 `spdlog::info(...)` 即可，不需要传 logger 指针。
+
+### 5.13.7 信号处理与优雅关闭
+
+```cpp
+// 全局 shutdown 标志，信号处理函数只做最简单的操作
+static std::atomic<bool> g_shutdown{false};
+
+static void onSignal(int sig) {
+    spdlog::info("收到信号 {}，准备关闭...", sig);
+    g_shutdown.store(true);
+}
+
+// init() 末尾注册
+std::signal(SIGINT,  onSignal);
+std::signal(SIGTERM, onSignal);
+```
+
+`run()` 的主循环（骨架阶段，第七章替换为事件循环）：
+
+```cpp
+void ServerApp::run() {
+    while (!g_shutdown.load()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    shutdown();
+}
+```
+
+`shutdown()` 用 `initialized_` 保证幂等——析构函数和信号都可能触发它：
+
+```cpp
+void ServerApp::shutdown() {
+    if (!initialized_) return;
+    initialized_ = false;
+
+    spdlog::info("正在关闭服务...");
+    // TODO（第七章）：event_loop_.stop()、tcp_server_.stop()
+    // TODO（第八章）：db_pool_.close()
+    spdlog::info("CloudVault Server 已关闭，Bye.");
+    spdlog::shutdown();
+}
+```
+
+### 5.13.8 编译与运行
+
+```bash
+# 1. 安装依赖（仅首次）
+sudo apt install -y libspdlog-dev nlohmann-json3-dev libssl-dev libgtest-dev
+
+# 2. 配置（build 目录必须在 Linux 文件系统，见坑 6）
+cmake -B ~/cv-server-build -S /mnt/d/CloudVault/server -G Ninja
+
+# 3. 编译
+cmake --build ~/cv-server-build
+
+# 4. 准备配置文件
+cp /mnt/d/CloudVault/server/config/server.example.json \
+   /mnt/d/CloudVault/server/config/server.json
+
+# 5. 运行
+~/cv-server-build/cloudvault_server /mnt/d/CloudVault/server/config/server.json
+```
+
+预期输出：
+
+```
+[2026-03-25 16:30:58.601] [info ] ╔══════════════════════════════════════╗
+[2026-03-25 16:30:58.601] [info ] ║      CloudVault Server  v2.0         ║
+[2026-03-25 16:30:58.601] [info ] ╚══════════════════════════════════════╝
+[2026-03-25 16:30:58.601] [info ] 监听地址  : 0.0.0.0:5000
+[2026-03-25 16:30:58.601] [info ] 工作线程  : 8
+[2026-03-25 16:30:58.601] [warn ] 骨架阶段：网络层与数据库层尚未初始化
+[2026-03-25 16:30:58.601] [info ] 初始化完成，按 Ctrl+C 关闭服务
+^C
+[2026-03-25 16:31:21.604] [info ] 收到信号 2，准备关闭...
+[2026-03-25 16:31:21.628] [info ] 正在关闭服务...
+[2026-03-25 16:31:21.628] [info ] CloudVault Server 已关闭，Bye.
+```
+
+---
+
+## 5.14 踩坑补充（服务端）
+
+### 坑 6：build 目录在 NTFS 上报 `Operation not permitted`
+
+**现象**：
+
+```
+CMake Error at .../CMakeDetermineSystem.cmake:246 (configure_file):
+  Operation not permitted
+```
+
+**原因**：`cmake -B build` 把构建目录建在 `/mnt/d/`（Windows NTFS 挂载），CMake 的 `configure_file` 在 WSL 挂载的 NTFS 上没有创建某些文件的权限。
+
+**解决**：build 目录放在 Linux 本地文件系统（ext4），源码可以留在 Windows：
+
+```bash
+cmake -B ~/cv-server-build -S /mnt/d/CloudVault/server -G Ninja
+#         ^^^^^^^^^^^^^^^^       ^^^^^^^^^^^^^^^^^^^^^^^^
+#         build 在 Linux          源码在 Windows（只读，没问题）
+```
+
+### 坑 7：`std::cerr` / `std::cout` 报 not a member of 'std'
+
+**原因**：`<iostream>` 没有被直接或间接 `#include`。`<fstream>` 不会自动包含 `<iostream>`。
+
+**解决**：在 `.cpp` 文件的 include 列表中显式加 `#include <iostream>`。
+
+---
+
 ## 本章新知识点
+
+**客户端**
 
 - **AUTOUIC**：`.ui` 文件转 `ui_*.h`，`setupUi(this)` 替代手写布局
 - **unique_ptr + 前向声明**：析构函数必须在完整类型可见处定义
@@ -542,6 +815,14 @@ if (auto* screen = QGuiApplication::primaryScreen()) {
 - **分类日志**：`Q_LOGGING_CATEGORY` / `qCDebug()`，按需开关
 - **信号槽参数兼容**：槽的参数可少于信号，多余参数被丢弃
 - **QSS 伪类**：`:hover` / `:focus` / `:disabled` / `:checked`
+
+**服务端**
+
+- **spdlog 多 sink**：console + rotating_file，`set_default_logger` 全局生效
+- **nlohmann/json_pointer**：安全读取嵌套键，键不存在时返回默认值
+- **`std::atomic<bool>` + `std::signal`**：跨线程可见的 shutdown 标志
+- **幂等 shutdown**：`initialized_` 标志防止析构和信号重复关闭资源
+- **WSL build 目录**：build 产物必须写到 Linux 文件系统，源码可在 Windows
 
 ---
 
