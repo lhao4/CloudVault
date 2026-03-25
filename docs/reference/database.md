@@ -312,7 +312,7 @@ WHERE gm.group_id = :gid AND u.online = 1;
 
 ## 6. 初始化脚本
 
-完整的建库脚本位于 [`sql/schema.sql`](../sql/schema.sql)，包含：
+完整的建库脚本位于 `sql/schema.sql`（第八章实现数据库层时创建），包含：
 
 1. `CREATE DATABASE IF NOT EXISTS cloudvault`
 2. 全部 6 张表的 `CREATE TABLE` 语句
