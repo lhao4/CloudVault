@@ -10,6 +10,9 @@
 #include "login_window.h"
 #include "ui_login_window.h"  // AUTOUIC 自动生成，路径在 cmake-build-debug/ 下
 
+#include "common/protocol.h"
+#include "common/protocol_codec.h"
+
 #include <QLoggingCategory>
 #include <QPixmap>
 
@@ -63,6 +66,8 @@ LoginWindow::LoginWindow(QWidget* parent)
 
     setupStyle();
     connectSignals();
+    registerHandlers();
+    setupNetwork();
 }
 
 // =============================================================
@@ -368,4 +373,67 @@ void LoginWindow::toggleRegConfirmVisibility() {
     const bool show = ui_->regConfirmToggleBtn->isChecked();
     ui_->regConfirmEdit->setEchoMode(show ? QLineEdit::Normal : QLineEdit::Password);
     ui_->regConfirmToggleBtn->setText(show ? "隐藏" : "显示");
+}
+
+// =============================================================
+// setupNetwork()：初始化网络层，连接到服务器
+// =============================================================
+void LoginWindow::setupNetwork() {
+    // 绑定网络事件到 UI 槽
+    connect(&tcp_client_, &cloudvault::TcpClient::connected,
+            this, &LoginWindow::onServerConnected);
+    connect(&tcp_client_, &cloudvault::TcpClient::disconnected,
+            this, &LoginWindow::onServerDisconnected);
+    connect(&tcp_client_, &cloudvault::TcpClient::errorOccurred,
+            this, &LoginWindow::onServerError);
+
+    // 收到 PDU 时交给 ResponseRouter 分发
+    connect(&tcp_client_, &cloudvault::TcpClient::pduReceived,
+            this, [this](cloudvault::PDUHeader hdr, std::vector<uint8_t> body) {
+                router_.dispatch(hdr, body);
+            });
+
+    // TODO（第八章）：从配置文件读取服务器地址
+    tcp_client_.connectToServer("127.0.0.1", 5000);
+}
+
+// =============================================================
+// registerHandlers()：注册 PDU 响应处理器
+// =============================================================
+void LoginWindow::registerHandlers() {
+    // PONG：服务器对 PING 的回应，表示连接正常
+    router_.registerHandler(
+        cloudvault::MessageType::PONG,
+        [this](const cloudvault::PDUHeader& /*hdr*/,
+               const std::vector<uint8_t>& /*body*/) {
+            qCDebug(lcLogin) << "PONG received — server alive";
+            ui_->serverAddrLabel->setText("127.0.0.1:5000");
+            ui_->serverDotLabel->setStyleSheet("color: #16A34A;");  // 绿色
+        });
+
+    // TODO（第八章）：LOGIN_RESPONSE、REGISTER_RESPONSE
+}
+
+// =============================================================
+// 网络事件槽
+// =============================================================
+void LoginWindow::onServerConnected() {
+    qCDebug(lcLogin) << "Connected to server, sending PING";
+    ui_->serverAddrLabel->setText("连接中…");
+
+    // 发送 PING 探测服务器延迟
+    auto ping = cloudvault::PDUBuilder(cloudvault::MessageType::PING).build();
+    tcp_client_.send(std::move(ping));
+}
+
+void LoginWindow::onServerDisconnected() {
+    qCDebug(lcLogin) << "Disconnected from server";
+    ui_->serverAddrLabel->setText("未连接");
+    ui_->serverDotLabel->setStyleSheet("color: #EF4444;");  // 红色
+}
+
+void LoginWindow::onServerError(const QString& message) {
+    qCWarning(lcLogin) << "Server error:" << message;
+    ui_->serverAddrLabel->setText("连接失败");
+    ui_->serverDotLabel->setStyleSheet("color: #EF4444;");  // 红色
 }
