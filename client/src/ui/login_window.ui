@@ -98,10 +98,23 @@
            </widget>
           </item>
           <item>
-           <widget class="QLineEdit" name="loginPasswordEdit">
-            <property name="placeholderText"><string>请输入密码</string></property>
-            <property name="echoMode"><enum>QLineEdit::Password</enum></property>
-           </widget>
+           <layout class="QHBoxLayout" name="loginPwdRowLayout">
+            <property name="spacing"><number>6</number></property>
+            <item>
+             <widget class="QLineEdit" name="loginPasswordEdit">
+              <property name="placeholderText"><string>请输入密码</string></property>
+              <property name="echoMode"><enum>QLineEdit::Password</enum></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="loginPwdToggleBtn">
+              <property name="text"><string>显示</string></property>
+              <property name="checkable"><bool>true</bool></property>
+              <property name="flat"><bool>true</bool></property>
+              <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+             </widget>
+            </item>
+           </layout>
           </item>
           <item>
            <widget class="QLabel" name="loginStatusLabel">
@@ -159,10 +172,23 @@
            </widget>
           </item>
           <item>
-           <widget class="QLineEdit" name="regPasswordEdit">
-            <property name="placeholderText"><string>请设置密码</string></property>
-            <property name="echoMode"><enum>QLineEdit::Password</enum></property>
-           </widget>
+           <layout class="QHBoxLayout" name="regPwdRowLayout">
+            <property name="spacing"><number>6</number></property>
+            <item>
+             <widget class="QLineEdit" name="regPasswordEdit">
+              <property name="placeholderText"><string>请设置密码</string></property>
+              <property name="echoMode"><enum>QLineEdit::Password</enum></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="regPwdToggleBtn">
+              <property name="text"><string>显示</string></property>
+              <property name="checkable"><bool>true</bool></property>
+              <property name="flat"><bool>true</bool></property>
+              <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+             </widget>
+            </item>
+           </layout>
           </item>
           <item>
            <widget class="QLabel" name="regConfirmLabel">
@@ -170,10 +196,23 @@
            </widget>
           </item>
           <item>
-           <widget class="QLineEdit" name="regConfirmEdit">
-            <property name="placeholderText"><string>再次输入密码</string></property>
-            <property name="echoMode"><enum>QLineEdit::Password</enum></property>
-           </widget>
+           <layout class="QHBoxLayout" name="regConfirmRowLayout">
+            <property name="spacing"><number>6</number></property>
+            <item>
+             <widget class="QLineEdit" name="regConfirmEdit">
+              <property name="placeholderText"><string>再次输入密码</string></property>
+              <property name="echoMode"><enum>QLineEdit::Password</enum></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="regConfirmToggleBtn">
+              <property name="text"><string>显示</string></property>
+              <property name="checkable"><bool>true</bool></property>
+              <property name="flat"><bool>true</bool></property>
+              <property name="cursor"><cursorShape>PointingHandCursor</cursorShape></property>
+             </widget>
+            </item>
+           </layout>
           </item>
           <item>
            <widget class="QLabel" name="regStatusLabel">
