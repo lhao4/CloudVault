@@ -8,6 +8,7 @@
 // =============================================================
 
 #include "login_window.h"
+#include "main_window.h"
 #include "ui_login_window.h"  // AUTOUIC 自动生成，路径在 cmake-build-debug/ 下
 
 #include "common/protocol.h"
@@ -65,6 +66,7 @@ LoginWindow::LoginWindow(QWidget* parent)
     : QWidget(parent)
     , ui_(std::make_unique<Ui::LoginWindow>())
     , auth_service_(tcp_client_, router_, this)
+    , friend_service_(tcp_client_, router_, this)
 {
     ui_->setupUi(this);
 
@@ -310,12 +312,27 @@ void LoginWindow::connectSignals() {
             });
 
     connect(&auth_service_, &cloudvault::AuthService::loginSuccess,
-            this, [this](int /*userId*/) {
+            this, [this](int userId) {
+                current_user_id_ = userId;
                 ui_->loginStatusLabel->setText("登录成功");
                 ui_->loginStatusLabel->setStyleSheet("color: #16A34A;");
                 ui_->loginStatusLabel->show();
-                // TODO（后续章节）：跳转到主窗口
                 resetLoginBtn();
+
+                if (!main_window_) {
+                    main_window_ = std::make_unique<MainWindow>(
+                        current_username_, friend_service_);
+                    connect(main_window_.get(), &MainWindow::windowClosed,
+                            this, [this] {
+                                tcp_client_.disconnectFromServer();
+                                QCoreApplication::quit();
+                            });
+                }
+                hide();
+                main_window_->show();
+                main_window_->raise();
+                main_window_->activateWindow();
+                friend_service_.flushFriends();
             });
 
     connect(&auth_service_, &cloudvault::AuthService::loginFailed,
@@ -345,6 +362,7 @@ void LoginWindow::onLoginClicked() {
     ui_->loginStatusLabel->hide();
     ui_->loginBtn->setEnabled(false);
     ui_->loginBtn->setText("登录中…");
+    current_username_ = username;
 
     qCDebug(lcLogin) << "准备登录：用户名 =" << username;
     auth_service_.login(username, password);

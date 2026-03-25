@@ -13,6 +13,7 @@
 #include "network/tcp_client.h"
 #include "network/response_router.h"
 #include "network/auth_service.h"
+#include "network/friend_service.h"
 
 #include <QString>
 #include <QWidget>
@@ -23,6 +24,7 @@
 QT_BEGIN_NAMESPACE
 namespace Ui { class LoginWindow; }
 QT_END_NAMESPACE
+class MainWindow;
 
 class LoginWindow : public QWidget {
     Q_OBJECT
@@ -55,10 +57,13 @@ private:
     QString serverEndpoint() const;
 
     std::unique_ptr<Ui::LoginWindow> ui_;  // RAII 管理，析构时自动释放
+    std::unique_ptr<MainWindow>      main_window_;
 
     QString server_host_;
     quint16 server_port_ = 0;
     bool server_config_loaded_ = false;
+    QString current_username_;
+    int     current_user_id_ = 0;
 
     // 网络层（第七章）
     cloudvault::TcpClient      tcp_client_;
@@ -66,4 +71,5 @@ private:
 
     // 认证服务（第八章）
     cloudvault::AuthService    auth_service_;
+    cloudvault::FriendService  friend_service_;
 };
