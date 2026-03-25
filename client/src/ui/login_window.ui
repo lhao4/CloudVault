@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>LoginWindow</class>
+ <widget class="QWidget" name="LoginWindow">
+  <property name="geometry">
+   <rect><x>0</x><y>0</y><width>400</width><height>560</height></rect>
+  </property>
+  <property name="windowTitle">
+   <string>CloudVault</string>
+  </property>
+  <!-- 主布局：左右边距撑满 -->
+  <layout class="QVBoxLayout" name="mainLayout">
+   <property name="leftMargin"><number>40</number></property>
+   <property name="topMargin"><number>40</number></property>
+   <property name="rightMargin"><number>40</number></property>
+   <property name="bottomMargin"><number>32</number></property>
+   <property name="spacing"><number>0</number></property>
+   <!-- ③ card 改为透明，去掉视觉边框 -->
+   <item>
+    <widget class="QWidget" name="card">
+     <property name="styleSheet">
+      <string>QWidget#card { background: transparent; border: none; }</string>
+     </property>
+     <layout class="QVBoxLayout" name="cardLayout">
+      <property name="leftMargin"><number>0</number></property>
+      <property name="topMargin"><number>0</number></property>
+      <property name="rightMargin"><number>0</number></property>
+      <property name="bottomMargin"><number>0</number></property>
+      <property name="spacing"><number>20</number></property>
+      <!-- Header：图标 + 标题 + 副标题 -->
+      <item>
+       <widget class="QWidget" name="headerWidget">
+        <layout class="QHBoxLayout" name="headerLayout">
+         <property name="spacing"><number>12</number></property>
+         <property name="leftMargin"><number>0</number></property>
+         <property name="topMargin"><number>0</number></property>
+         <property name="rightMargin"><number>0</number></property>
+         <property name="bottomMargin"><number>0</number></property>
+         <item>
+          <widget class="QLabel" name="iconLabel">
+           <property name="text"><string>💬</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QWidget" name="titleWidget">
+           <layout class="QVBoxLayout" name="titleLayout">
+            <property name="spacing"><number>2</number></property>
+            <property name="leftMargin"><number>0</number></property>
+            <property name="topMargin"><number>0</number></property>
+            <property name="rightMargin"><number>0</number></property>
+            <property name="bottomMargin"><number>0</number></property>
+            <item>
+             <widget class="QLabel" name="appNameLabel">
+              <property name="text"><string>CloudVault</string></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="appSubtitleLabel">
+              <property name="text"><string>即时通讯 · 文件传输</string></property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item>
+          <spacer name="headerSpacer">
+           <property name="orientation"><enum>Qt::Horizontal</enum></property>
+           <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <!-- Tab 控件：登录 / 注册 -->
+      <item>
+       <widget class="QTabWidget" name="tabWidget">
+        <widget class="QWidget" name="loginTab">
+         <attribute name="title"><string>登录</string></attribute>
+         <layout class="QVBoxLayout" name="loginLayout">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>16</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <widget class="QLabel" name="loginUserLabel">
+            <property name="text"><string>用户名</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="loginUsernameEdit">
+            <property name="placeholderText"><string>请输入用户名</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="loginPwdLabel">
+            <property name="text"><string>密码</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="loginPasswordEdit">
+            <property name="placeholderText"><string>请输入密码</string></property>
+            <property name="echoMode"><enum>QLineEdit::Password</enum></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="loginStatusLabel">
+            <property name="text"><string/></property>
+            <property name="visible"><bool>false</bool></property>
+            <property name="wordWrap"><bool>true</bool></property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="loginSpacer1">
+            <property name="orientation"><enum>Qt::Vertical</enum></property>
+            <property name="sizeType"><enum>QSizePolicy::Fixed</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>8</height></size></property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="loginBtn">
+            <property name="text"><string>登录</string></property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="loginSpacer2">
+            <property name="orientation"><enum>Qt::Vertical</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="registerTab">
+         <attribute name="title"><string>注册</string></attribute>
+         <layout class="QVBoxLayout" name="registerLayout">
+          <property name="leftMargin"><number>0</number></property>
+          <property name="topMargin"><number>16</number></property>
+          <property name="rightMargin"><number>0</number></property>
+          <property name="bottomMargin"><number>0</number></property>
+          <property name="spacing"><number>6</number></property>
+          <item>
+           <layout class="QHBoxLayout" name="nameRowLayout">
+            <property name="spacing"><number>8</number></property>
+            <item>
+             <widget class="QLineEdit" name="regUsernameEdit">
+              <property name="placeholderText"><string>用户名</string></property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="regDisplayNameEdit">
+              <property name="placeholderText"><string>昵称</string></property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <widget class="QLabel" name="regPwdLabel">
+            <property name="text"><string>密码（至少 8 位）</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="regPasswordEdit">
+            <property name="placeholderText"><string>请设置密码</string></property>
+            <property name="echoMode"><enum>QLineEdit::Password</enum></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="regConfirmLabel">
+            <property name="text"><string>确认密码</string></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="regConfirmEdit">
+            <property name="placeholderText"><string>再次输入密码</string></property>
+            <property name="echoMode"><enum>QLineEdit::Password</enum></property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="regStatusLabel">
+            <property name="text"><string/></property>
+            <property name="visible"><bool>false</bool></property>
+            <property name="wordWrap"><bool>true</bool></property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="regSpacer1">
+            <property name="orientation"><enum>Qt::Vertical</enum></property>
+            <property name="sizeType"><enum>QSizePolicy::Fixed</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>8</height></size></property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QPushButton" name="regBtn">
+            <property name="text"><string>创建账号</string></property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="regSpacer2">
+            <property name="orientation"><enum>Qt::Vertical</enum></property>
+            <property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property>
+           </spacer>
+          </item>
+         </layout>
+        </widget>
+       </widget>
+      </item>
+      <!-- 底部服务器状态栏 -->
+      <item>
+       <widget class="QWidget" name="statusFrame">
+        <layout class="QHBoxLayout" name="statusLayout">
+         <property name="leftMargin"><number>12</number></property>
+         <property name="topMargin"><number>8</number></property>
+         <property name="rightMargin"><number>12</number></property>
+         <property name="bottomMargin"><number>8</number></property>
+         <property name="spacing"><number>8</number></property>
+         <item>
+          <widget class="QLabel" name="serverDotLabel">
+           <property name="text"><string>●</string></property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="serverAddrLabel">
+           <property name="text"><string>127.0.0.1:5000 · 已就绪</string></property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="statusSpacer">
+           <property name="orientation"><enum>Qt::Horizontal</enum></property>
+           <property name="sizeHint" stdset="0"><size><width>40</width><height>20</height></size></property>
+          </spacer>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
