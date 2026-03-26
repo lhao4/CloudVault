@@ -35,8 +35,11 @@ private:
 
     QString file_name_;
     QList<QPair<QString, bool>> friends_;
+    QLabel* file_hint_label_ = nullptr;
+    QLabel* selection_hint_label_ = nullptr;
     QLineEdit* search_edit_ = nullptr;
     QListWidget* friend_list_ = nullptr;
+    QLabel* empty_state_label_ = nullptr;
     QPushButton* select_all_btn_ = nullptr;
     QPushButton* clear_btn_ = nullptr;
     QPushButton* confirm_btn_ = nullptr;

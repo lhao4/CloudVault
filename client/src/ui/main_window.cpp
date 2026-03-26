@@ -9,6 +9,7 @@
 #include "ui/share_file_dialog.h"
 
 #include <QCloseEvent>
+#include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -1023,35 +1024,49 @@ void MainWindow::connectSignals() {
             });
     connect(&share_service_, &cloudvault::ShareService::shareRequestSent,
             this, [this](const QString& message) {
+                detail_file_meta_label_->setText(QStringLiteral("分享请求已发出，等待对方确认接收。"));
                 setFileStatus(message);
             });
     connect(&share_service_, &cloudvault::ShareService::shareRequestFailed,
             this, [this](const QString& reason) {
+                detail_file_meta_label_->setText(QStringLiteral("分享请求发送失败，请检查在线好友和文件状态。"));
                 setFileStatus(reason, true);
             });
     connect(&share_service_, &cloudvault::ShareService::incomingShareRequest,
             this, [this](const QString& from, const QString& file_path) {
-                const auto reply = QMessageBox::question(
-                    this,
-                    QStringLiteral("文件分享"),
-                    QStringLiteral("%1 向你分享了文件 %2，是否接收？")
-                        .arg(from, file_path),
-                    QMessageBox::Yes | QMessageBox::No);
-                if (reply == QMessageBox::Yes) {
+                QMessageBox box(this);
+                box.setIcon(QMessageBox::Question);
+                box.setWindowTitle(QStringLiteral("收到文件分享"));
+                box.setText(QStringLiteral("%1 想与你共享文件").arg(from));
+                box.setInformativeText(
+                    QStringLiteral("文件：%1\n来源路径：%2\n接收后会复制到你的根目录。")
+                        .arg(QFileInfo(file_path).fileName(), file_path));
+                auto* accept_btn = box.addButton(QStringLiteral("接收"), QMessageBox::AcceptRole);
+                box.addButton(QStringLiteral("稍后处理"), QMessageBox::RejectRole);
+                box.exec();
+                if (box.clickedButton() == accept_btn) {
+                    setFileStatus(QStringLiteral("正在接收来自 %1 的分享…").arg(from));
                     share_service_.acceptShare(from, file_path);
+                } else {
+                    setFileStatus(QStringLiteral("已保留来自 %1 的分享提示，等待下次处理。").arg(from));
                 }
             });
     connect(&share_service_, &cloudvault::ShareService::shareAccepted,
             this, [this](const QString& message) {
-                QMessageBox::information(this, QStringLiteral("文件分享"), message);
+                detail_file_target_label_->setText(QStringLiteral("选中：分享接收完成"));
+                detail_file_meta_label_->setText(QStringLiteral("文件已复制到你的根目录，可在文件页继续整理。"));
+                QMessageBox::information(this, QStringLiteral("已接收分享"), message);
                 file_search_mode_ = false;
                 current_file_query_.clear();
                 file_search_edit_->clear();
+                setFileStatus(QStringLiteral("分享接收成功，正在刷新根目录…"));
                 file_service_.listFiles(QStringLiteral("/"));
             });
     connect(&share_service_, &cloudvault::ShareService::shareAcceptFailed,
             this, [this](const QString& reason) {
-                QMessageBox::warning(this, QStringLiteral("文件分享"), reason);
+                detail_file_meta_label_->setText(QStringLiteral("分享接收失败，请稍后重试。"));
+                setFileStatus(reason, true);
+                QMessageBox::warning(this, QStringLiteral("接收失败"), reason);
             });
 }
 
@@ -1402,7 +1417,9 @@ void MainWindow::openShareFileDialog() {
                 if (!targets.isEmpty()) {
                     detail_file_target_label_->setText(
                         QStringLiteral("已选择分享对象：%1").arg(targets.join(", ")));
-                    setFileStatus(QStringLiteral("正在分享 %1 …").arg(path));
+                    detail_file_meta_label_->setText(
+                        QStringLiteral("源文件：%1\n系统将向选中的在线好友发送接收确认。").arg(path));
+                    setFileStatus(QStringLiteral("正在发送 %1 的分享请求…").arg(QFileInfo(path).fileName()));
                     share_service_.shareFile(path, targets);
                 }
             });

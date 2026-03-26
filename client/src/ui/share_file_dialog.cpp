@@ -5,6 +5,7 @@
 
 #include "share_file_dialog.h"
 
+#include <QFileInfo>
 #include <QCheckBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -35,8 +36,22 @@ QString dialogStyle() {
             color: #6B7280;
         }
 
+        QLabel#fileHintLabel {
+            background: #FFFFFF;
+            border: 1px solid #E2E6EA;
+            border-radius: 10px;
+            color: #111827;
+            font-size: 13px;
+            padding: 10px 12px;
+        }
+
+        QLabel#selectionHintLabel {
+            color: #6B7280;
+            font-size: 12px;
+        }
+
         QLineEdit {
-            min-height: 42px;
+            min-height: 40px;
             background: #F0F2F5;
             border: 1px solid #E2E6EA;
             border-radius: 8px;
@@ -57,7 +72,7 @@ QString dialogStyle() {
         }
 
         QListWidget::item {
-            padding: 6px 10px;
+            padding: 4px 8px;
             border-bottom: 1px solid #F0F2F5;
         }
 
@@ -65,6 +80,10 @@ QString dialogStyle() {
             spacing: 10px;
             font-size: 14px;
             color: #111827;
+        }
+
+        QCheckBox:disabled {
+            color: #9CA3AF;
         }
 
         QCheckBox::indicator {
@@ -108,6 +127,15 @@ QString dialogStyle() {
         QPushButton#primaryButton:hover {
             background: #2563EB;
         }
+
+        QLabel#emptyStateLabel {
+            background: #F8FAFC;
+            border: 1px dashed #CBD5E1;
+            border-radius: 10px;
+            color: #6B7280;
+            font-size: 13px;
+            padding: 14px 12px;
+        }
     )");
 }
 
@@ -126,28 +154,43 @@ ShareFileDialog::ShareFileDialog(const QString& file_name,
 void ShareFileDialog::setupUi() {
     setWindowTitle(QStringLiteral("分享文件"));
     setModal(true);
-    resize(460, 520);
+    resize(440, 500);
     setStyleSheet(dialogStyle());
 
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(18, 18, 18, 18);
-    root->setSpacing(12);
+    root->setContentsMargins(16, 16, 16, 16);
+    root->setSpacing(10);
 
     auto* title = new QLabel(
         QStringLiteral("分享「%1」给好友").arg(file_name_), this);
     title->setObjectName(QStringLiteral("titleLabel"));
     root->addWidget(title);
 
-    auto* hint = new QLabel(QStringLiteral("当前仅展示已拉取到的好友列表。"), this);
+    auto* hint = new QLabel(QStringLiteral("仅在线好友可立即接收，离线好友会保留展示但不可选。"), this);
     hint->setObjectName(QStringLiteral("subtleLabel"));
     root->addWidget(hint);
+
+    file_hint_label_ = new QLabel(
+        QStringLiteral("当前文件：%1").arg(QFileInfo(file_name_).fileName()), this);
+    file_hint_label_->setObjectName(QStringLiteral("fileHintLabel"));
+    root->addWidget(file_hint_label_);
 
     search_edit_ = new QLineEdit(this);
     search_edit_->setPlaceholderText(QStringLiteral("搜索好友…"));
     root->addWidget(search_edit_);
 
+    selection_hint_label_ = new QLabel(this);
+    selection_hint_label_->setObjectName(QStringLiteral("selectionHintLabel"));
+    root->addWidget(selection_hint_label_);
+
     friend_list_ = new QListWidget(this);
     root->addWidget(friend_list_, 1);
+
+    empty_state_label_ = new QLabel(this);
+    empty_state_label_->setObjectName(QStringLiteral("emptyStateLabel"));
+    empty_state_label_->setAlignment(Qt::AlignCenter);
+    empty_state_label_->hide();
+    root->addWidget(empty_state_label_);
 
     auto* button_row = new QHBoxLayout();
     button_row->setSpacing(8);
@@ -171,7 +214,7 @@ void ShareFileDialog::connectSignals() {
         for (int i = 0; i < friend_list_->count(); ++i) {
             if (auto* item = friend_list_->item(i)) {
                 auto* checkbox = qobject_cast<QCheckBox*>(friend_list_->itemWidget(item));
-                if (checkbox) {
+                if (checkbox && checkbox->isEnabled()) {
                     checkbox->setChecked(true);
                 }
             }
@@ -201,31 +244,65 @@ void ShareFileDialog::connectSignals() {
 
 void ShareFileDialog::populateList(const QString& keyword) {
     friend_list_->clear();
+    const QString trimmed = keyword.trimmed();
+    int visible_count = 0;
+    int online_count = 0;
 
     for (const auto& [username, online] : friends_) {
-        if (!keyword.trimmed().isEmpty() &&
-            !username.contains(keyword.trimmed(), Qt::CaseInsensitive)) {
+        if (!trimmed.isEmpty() &&
+            !username.contains(trimmed, Qt::CaseInsensitive)) {
             continue;
         }
 
         auto* item = new QListWidgetItem();
         item->setSizeHint(QSize(0, 36));
 
-        auto* checkbox = new QCheckBox(
-            QStringLiteral("%1  %2")
-                .arg(online ? QStringLiteral("🔵") : QStringLiteral("⚪"), username),
-            friend_list_);
+        auto* checkbox = new QCheckBox(friend_list_);
+        checkbox->setText(
+            online
+                ? QStringLiteral("在线  %1").arg(username)
+                : QStringLiteral("离线  %1  · 暂不可接收").arg(username));
         checkbox->setProperty("username", username);
+        checkbox->setEnabled(online);
         friend_list_->addItem(item);
         friend_list_->setItemWidget(item, checkbox);
         connect(checkbox, &QCheckBox::toggled, this, &ShareFileDialog::updateConfirmButton);
+        ++visible_count;
+        if (online) {
+            ++online_count;
+        }
     }
+
+    friend_list_->setVisible(visible_count > 0);
+    empty_state_label_->setVisible(visible_count == 0);
+    empty_state_label_->setText(
+        trimmed.isEmpty()
+            ? QStringLiteral("当前没有可展示的好友。先添加好友，再发起文件分享。")
+            : QStringLiteral("没有匹配的好友，换个关键词再试。"));
+    selection_hint_label_->setText(
+        visible_count == 0
+            ? QStringLiteral("0 位好友可见")
+            : QStringLiteral("当前显示 %1 位好友，其中 %2 位在线可选")
+                  .arg(visible_count)
+                  .arg(online_count));
+    updateConfirmButton();
 }
 
 void ShareFileDialog::updateConfirmButton() {
     const QStringList targets = selectedTargets();
-    confirm_btn_->setText(QStringLiteral("确认分享 (%1)").arg(targets.size()));
+    if (targets.isEmpty()) {
+        confirm_btn_->setText(QStringLiteral("选择接收好友"));
+    } else {
+        confirm_btn_->setText(QStringLiteral("分享给 %1 位好友").arg(targets.size()));
+    }
     confirm_btn_->setEnabled(!targets.isEmpty());
+    clear_btn_->setEnabled(friend_list_->count() > 0);
+    select_all_btn_->setEnabled(friend_list_->count() > 0);
+
+    if (!targets.isEmpty()) {
+        selection_hint_label_->setText(
+            QStringLiteral("已选择：%1").arg(targets.join(QStringLiteral("、"))));
+    }
 }
 
 QStringList ShareFileDialog::selectedTargets() const {
