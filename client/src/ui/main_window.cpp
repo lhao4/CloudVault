@@ -68,6 +68,17 @@ void repolish(QWidget* widget) {
     widget->update();
 }
 
+void allowViewToHandleMouseEvents(QWidget* widget) {
+    if (!widget) {
+        return;
+    }
+    widget->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    const auto children = widget->findChildren<QWidget*>();
+    for (QWidget* child : children) {
+        child->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    }
+}
+
 void applyShadow(QWidget* widget, int blur = 40, int offset_y = 8, int alpha = 30) {
     auto* effect = new QGraphicsDropShadowEffect(widget);
     effect->setBlurRadius(blur);
@@ -492,6 +503,7 @@ QWidget* createContactItemWidget(const QString& username,
 
     body_layout->addLayout(meta_layout);
     root->addWidget(body, 1);
+    allowViewToHandleMouseEvents(frame);
     return frame;
 }
 
@@ -554,6 +566,7 @@ QWidget* createFileItemWidget(const cloudvault::FileEntry& entry,
 
     layout->addWidget(body, 1);
     frame->setToolTip(entry.path);
+    allowViewToHandleMouseEvents(frame);
     return frame;
 }
 
@@ -1626,7 +1639,9 @@ void MainWindow::refreshFriendList(const QList<QPair<QString, bool>>& friends) {
 }
 
 void MainWindow::filterFriendList(const QString& keyword) {
-    const QString current = selectedFriend();
+    const QString current = !active_chat_peer_.isEmpty()
+        ? active_chat_peer_
+        : selectedFriend();
     const QString trimmed = keyword.trimmed();
     QList<QPair<QString, bool>> ordered_friends = friends_;
     std::sort(ordered_friends.begin(), ordered_friends.end(),
@@ -1691,6 +1706,7 @@ void MainWindow::filterFriendList(const QString& keyword) {
                                                    contact_list_);
             contact_list_->setItemWidget(item, widget);
             if (is_selected) {
+                contact_list_->setCurrentItem(item);
                 item->setSelected(true);
             }
         }
