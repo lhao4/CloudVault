@@ -230,12 +230,15 @@ void FriendHandler::handleFlushFriends(std::shared_ptr<TcpConnection> conn,
                                        const std::vector<uint8_t>&) {
     const auto current = sessions_.findByConnection(conn);
     if (!current) {
+        spdlog::warn("FLUSH_FRIENDS: unauthorized request from {}", conn->peerAddr());
         conn->send(buildStatusMessage(MessageType::FLUSH_FRIENDS_RESPONSE,
                                       kStatusUnauthorized, "未登录"));
         return;
     }
 
+    spdlog::info("FLUSH_FRIENDS: user={} uid={}", current->username, current->user_id);
     const auto friends = friends_.listFriends(current->user_id);
+    spdlog::info("FLUSH_FRIENDS: returning {} friends", friends.size());
     auto response = PDUBuilder(MessageType::FLUSH_FRIENDS_RESPONSE)
         .writeUInt8(kStatusOk)
         .writeUInt16(static_cast<uint16_t>(friends.size()));

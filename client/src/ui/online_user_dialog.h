@@ -20,6 +20,7 @@ class OnlineUserDialog : public QDialog {
 public:
     explicit OnlineUserDialog(const QList<QPair<QString, bool>>& users,
                               QWidget* parent = nullptr);
+    void setUsers(const QList<QPair<QString, bool>>& users);
 
 signals:
     void refreshRequested();

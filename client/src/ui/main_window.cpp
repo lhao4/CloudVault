@@ -15,6 +15,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QStyle>
@@ -825,6 +826,25 @@ void MainWindow::connectSignals() {
             this, [this](const QString&) { friend_service_.flushFriends(); });
     connect(&friend_service_, &cloudvault::FriendService::friendDeleted,
             this, [this](const QString&) { friend_service_.flushFriends(); });
+    connect(&friend_service_, &cloudvault::FriendService::friendRequestSent,
+            this, [this](const QString& target) {
+                QMessageBox::information(this, QStringLiteral("好友申请"),
+                    QStringLiteral("已向 %1 发送好友申请，等待对方同意。").arg(target));
+            });
+    connect(&friend_service_, &cloudvault::FriendService::friendAddFailed,
+            this, [this](const QString& reason) {
+                QMessageBox::warning(this, QStringLiteral("添加失败"), reason);
+            });
+    connect(&friend_service_, &cloudvault::FriendService::incomingFriendRequest,
+            this, [this](const QString& from) {
+                auto reply = QMessageBox::question(
+                    this, QStringLiteral("好友申请"),
+                    QStringLiteral("%1 想添加你为好友，是否同意？").arg(from),
+                    QMessageBox::Yes | QMessageBox::No);
+                if (reply == QMessageBox::Yes) {
+                    friend_service_.agreeFriend(from);
+                }
+            });
 }
 
 void MainWindow::refreshFriendList(const QList<QPair<QString, bool>>& friends) {
@@ -945,11 +965,11 @@ void MainWindow::openOnlineUserDialog() {
         OnlineUserDialog dialog(friends_, this);
         connect(&dialog, &OnlineUserDialog::refreshRequested,
                 this, [this] { friend_service_.flushFriends(); });
+        connect(&friend_service_, &cloudvault::FriendService::friendsRefreshed,
+                &dialog, &OnlineUserDialog::setUsers);
         connect(&dialog, &OnlineUserDialog::userChosen,
                 this, [this](const QString& username) {
-                    if (message_tab_btn_->isChecked()) {
-                        contact_search_edit_->setText(username);
-                    }
+                    friend_service_.addFriend(username);
                 });
         dialog.exec();
     }

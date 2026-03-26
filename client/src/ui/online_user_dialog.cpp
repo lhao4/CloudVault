@@ -108,6 +108,11 @@ OnlineUserDialog::OnlineUserDialog(const QList<QPair<QString, bool>>& users,
     populateList();
 }
 
+void OnlineUserDialog::setUsers(const QList<QPair<QString, bool>>& users) {
+    users_ = users;
+    populateList(search_edit_ ? search_edit_->text() : QString());
+}
+
 void OnlineUserDialog::setupUi() {
     setWindowTitle(QStringLiteral("在线用户"));
     setModal(true);
@@ -125,7 +130,7 @@ void OnlineUserDialog::setupUi() {
     title->setObjectName(QStringLiteral("titleLabel"));
     root->addWidget(title);
 
-    auto* hint = new QLabel(QStringLiteral("当前显示基于已拉取的在线好友数据。"), this);
+    auto* hint = new QLabel(QStringLiteral("可直接输入用户名添加，也可从在线列表中选择。"), this);
     hint->setObjectName(QStringLiteral("subtleLabel"));
     root->addWidget(hint);
 
@@ -151,14 +156,22 @@ void OnlineUserDialog::setupUi() {
 
 void OnlineUserDialog::connectSignals() {
     connect(search_edit_, &QLineEdit::textChanged,
-            this, [this](const QString& text) { populateList(text); });
+            this, [this](const QString& text) {
+                populateList(text);
+                add_btn_->setEnabled(!text.trimmed().isEmpty() || user_list_->currentItem() != nullptr);
+            });
     connect(user_list_, &QListWidget::itemSelectionChanged, this, [this] {
-        add_btn_->setEnabled(user_list_->currentItem() != nullptr);
+        add_btn_->setEnabled(!search_edit_->text().trimmed().isEmpty() ||
+                             user_list_->currentItem() != nullptr);
     });
     connect(refresh_btn_, &QPushButton::clicked, this, &OnlineUserDialog::refreshRequested);
     connect(add_btn_, &QPushButton::clicked, this, [this] {
+        QString username = search_edit_->text().trimmed();
         if (auto* item = user_list_->currentItem()) {
-            emit userChosen(item->data(Qt::UserRole).toString());
+            username = item->data(Qt::UserRole).toString();
+        }
+        if (!username.isEmpty()) {
+            emit userChosen(username);
             accept();
         }
     });
