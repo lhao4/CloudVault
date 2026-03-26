@@ -50,6 +50,7 @@ private:
     void refreshFileList(const QString& path, const cloudvault::FileEntries& entries);
     void updateFileSelectionState();
     void applySelectedFile();
+    void setFileStatus(const QString& message, bool error = false);
     void navigateToFilePath(const QString& path);
     void openCurrentParentDirectory();
     void createDirectory();
@@ -95,8 +96,10 @@ private:
     QLabel* chat_title_label_ = nullptr;
     QLabel* chat_status_label_ = nullptr;
     QLabel* file_path_label_ = nullptr;
+    QLabel* file_status_label_ = nullptr;
     QLineEdit* file_search_edit_ = nullptr;
     QListWidget* file_list_ = nullptr;
+    QLabel* file_empty_state_label_ = nullptr;
     QPushButton* file_back_btn_ = nullptr;
     QPushButton* file_refresh_btn_ = nullptr;
     QPushButton* file_create_btn_ = nullptr;

@@ -209,6 +209,25 @@ QString mainWindowStyle() {
             font-size: 12px;
         }
 
+        QLabel#fileStatusLabel {
+            color: #2563EB;
+            font-size: 12px;
+            padding: 2px 0 0 0;
+        }
+
+        QLabel#fileStatusLabel[error="true"] {
+            color: #DC2626;
+        }
+
+        QLabel#fileEmptyStateLabel {
+            background: #F8FAFC;
+            border: 1px dashed #CBD5E1;
+            border-radius: 12px;
+            color: #6B7280;
+            font-size: 13px;
+            padding: 24px 18px;
+        }
+
         QFrame#contactAccent {
             min-width: 3px;
             max-width: 3px;
@@ -531,6 +550,7 @@ QWidget* createFileItemWidget(const cloudvault::FileEntry& entry,
     path_label->setObjectName(QStringLiteral("filePathHintLabel"));
     text_layout->addWidget(path_label);
     layout->addLayout(text_layout, 1);
+    frame->setToolTip(entry.path);
 
     return frame;
 }
@@ -703,8 +723,12 @@ void MainWindow::setupUi() {
         title->setObjectName(QStringLiteral("centerTitleLabel"));
         file_path_label_ = new QLabel(QStringLiteral("📁 /"), header);
         file_path_label_->setObjectName(QStringLiteral("secondaryLabel"));
+        file_status_label_ = new QLabel(QStringLiteral("正在加载个人文件空间…"), header);
+        file_status_label_->setObjectName(QStringLiteral("fileStatusLabel"));
+        file_status_label_->setWordWrap(true);
         header_layout->addWidget(title);
         header_layout->addWidget(file_path_label_);
+        header_layout->addWidget(file_status_label_);
         page_layout->addWidget(header);
 
         auto* toolbar = new QFrame(page);
@@ -730,6 +754,14 @@ void MainWindow::setupUi() {
         file_list_->setObjectName(QStringLiteral("fileList"));
         file_list_->setSpacing(0);
         page_layout->addWidget(file_list_, 1);
+
+        file_empty_state_label_ = new QLabel(
+            QStringLiteral("当前目录为空。\n点击“+ 新建”创建第一个文件夹，或使用搜索查看历史结果。"),
+            page);
+        file_empty_state_label_->setObjectName(QStringLiteral("fileEmptyStateLabel"));
+        file_empty_state_label_->setAlignment(Qt::AlignCenter);
+        file_empty_state_label_->hide();
+        page_layout->addWidget(file_empty_state_label_);
 
         auto* selection_card = new QFrame(page);
         selection_card->setObjectName(QStringLiteral("detailCard"));
@@ -898,6 +930,9 @@ void MainWindow::connectSignals() {
     connect(file_back_btn_, &QPushButton::clicked, this, &MainWindow::openCurrentParentDirectory);
     connect(file_refresh_btn_, &QPushButton::clicked,
             this, [this] {
+                setFileStatus(file_search_mode_ && !current_file_query_.isEmpty()
+                                  ? QStringLiteral("正在刷新搜索结果…")
+                                  : QStringLiteral("正在刷新当前目录…"));
                 if (file_search_mode_ && !current_file_query_.isEmpty()) {
                     file_service_.search(current_file_query_);
                 } else {
@@ -911,6 +946,7 @@ void MainWindow::connectSignals() {
     connect(file_list_, &QListWidget::itemDoubleClicked,
             this, [this](QListWidgetItem* item) {
                 if (!item || !item->data(Qt::UserRole + 1).toBool()) {
+                    setFileStatus(QStringLiteral("当前仅支持双击目录进入下一层。"));
                     return;
                 }
                 file_search_mode_ = false;
@@ -951,7 +987,7 @@ void MainWindow::connectSignals() {
             this, &MainWindow::refreshFileList);
     connect(&file_service_, &cloudvault::FileService::fileListFailed,
             this, [this](const QString& reason) {
-                QMessageBox::warning(this, QStringLiteral("文件列表"), reason);
+                setFileStatus(reason, true);
             });
     connect(&file_service_, &cloudvault::FileService::searchCompleted,
             this, [this](const QString& keyword, const cloudvault::FileEntries& entries) {
@@ -961,11 +997,11 @@ void MainWindow::connectSignals() {
             });
     connect(&file_service_, &cloudvault::FileService::searchFailed,
             this, [this](const QString& reason) {
-                QMessageBox::warning(this, QStringLiteral("文件搜索"), reason);
+                setFileStatus(reason, true);
             });
     connect(&file_service_, &cloudvault::FileService::fileOperationSucceeded,
             this, [this](const QString& message) {
-                QMessageBox::information(this, QStringLiteral("文件操作"), message);
+                setFileStatus(message);
                 file_search_mode_ = false;
                 current_file_query_.clear();
                 file_search_edit_->clear();
@@ -973,7 +1009,7 @@ void MainWindow::connectSignals() {
             });
     connect(&file_service_, &cloudvault::FileService::fileOperationFailed,
             this, [this](const QString& message) {
-                QMessageBox::warning(this, QStringLiteral("文件操作"), message);
+                setFileStatus(message, true);
             });
 }
 
@@ -1063,6 +1099,12 @@ void MainWindow::applySelectedFriend() {
                : QStringLiteral("离线 · 静默等待状态更新"));
 }
 
+void MainWindow::setFileStatus(const QString& message, bool error) {
+    file_status_label_->setProperty("error", error);
+    file_status_label_->setText(message);
+    repolish(file_status_label_);
+}
+
 void MainWindow::refreshFileList(const QString& path,
                                  const cloudvault::FileEntries& entries) {
     if (!file_search_mode_) {
@@ -1086,15 +1128,23 @@ void MainWindow::refreshFileList(const QString& path,
     } else {
         file_path_label_->setText(QStringLiteral("📁 %1").arg(current_file_path_));
     }
+    file_path_label_->setToolTip(file_search_mode_ ? current_file_query_ : current_file_path_);
     file_back_btn_->setEnabled(file_search_mode_ || current_file_path_ != QStringLiteral("/"));
+    file_empty_state_label_->setVisible(file_list_->count() == 0);
 
     if (file_list_->count() > 0) {
         file_list_->setCurrentRow(0);
+        setFileStatus(file_search_mode_
+                          ? QStringLiteral("搜索完成，共找到 %1 项。").arg(file_list_->count())
+                          : QStringLiteral("目录已刷新，共 %1 项。").arg(file_list_->count()));
     } else {
         detail_file_target_label_->setText(QStringLiteral("选中：未选择文件"));
         detail_file_meta_label_->setText(file_search_mode_
             ? QStringLiteral("没有匹配结果，修改关键词后回车重试。")
             : QStringLiteral("当前目录为空，可以新建文件夹开始管理。"));
+        setFileStatus(file_search_mode_
+                          ? QStringLiteral("没有找到与“%1”匹配的文件。").arg(current_file_query_)
+                          : QStringLiteral("当前目录为空。"));
     }
 
     updateFileSelectionState();
@@ -1132,13 +1182,14 @@ void MainWindow::applySelectedFile() {
     detail_file_target_label_->setText(QStringLiteral("选中：%1").arg(name));
     detail_file_meta_label_->setText(
         is_dir
-            ? QStringLiteral("目录 · 双击可进入；支持重命名、移动、删除。")
-            : QStringLiteral("文件 · 支持重命名、移动、删除。"));
+            ? QStringLiteral("目录 · 路径：%1\n双击可进入；支持重命名、移动、删除。").arg(path)
+            : QStringLiteral("文件 · 路径：%1\n支持重命名、移动、删除。").arg(path));
 }
 
 void MainWindow::navigateToFilePath(const QString& path) {
     file_search_mode_ = false;
     current_file_query_.clear();
+    setFileStatus(QStringLiteral("正在打开 %1 …").arg(path.isEmpty() ? QStringLiteral("/") : path));
     file_service_.listFiles(path.isEmpty() ? QStringLiteral("/") : path);
 }
 
@@ -1147,6 +1198,7 @@ void MainWindow::openCurrentParentDirectory() {
         file_search_mode_ = false;
         current_file_query_.clear();
         file_search_edit_->clear();
+        setFileStatus(QStringLiteral("返回当前目录…"));
         file_service_.listFiles(current_file_path_);
         return;
     }
@@ -1171,6 +1223,7 @@ void MainWindow::createDirectory() {
     if (name.isEmpty()) {
         return;
     }
+    setFileStatus(QStringLiteral("正在创建“%1”…").arg(name));
     file_service_.createDirectory(current_file_path_, name);
 }
 
@@ -1189,6 +1242,7 @@ void MainWindow::renameSelectedFile() {
     if (new_name.isEmpty() || new_name == current_name) {
         return;
     }
+    setFileStatus(QStringLiteral("正在将“%1”重命名为“%2”…").arg(current_name, new_name));
     file_service_.renamePath(path, new_name);
 }
 
@@ -1206,6 +1260,7 @@ void MainWindow::moveSelectedFile() {
     if (destination.isEmpty()) {
         return;
     }
+    setFileStatus(QStringLiteral("正在移动到 %1 …").arg(destination));
     file_service_.movePath(path, destination);
 }
 
@@ -1223,6 +1278,7 @@ void MainWindow::deleteSelectedFile() {
     if (reply != QMessageBox::Yes) {
         return;
     }
+    setFileStatus(QStringLiteral("正在删除“%1”…").arg(current_name));
     file_service_.deletePath(path);
 }
 
@@ -1231,9 +1287,11 @@ void MainWindow::runFileSearch() {
     if (keyword.isEmpty()) {
         file_search_mode_ = false;
         current_file_query_.clear();
+        setFileStatus(QStringLiteral("已清空搜索，返回当前目录。"));
         file_service_.listFiles(current_file_path_);
         return;
     }
+    setFileStatus(QStringLiteral("正在搜索“%1”…").arg(keyword));
     file_service_.search(keyword);
 }
 
@@ -1243,6 +1301,7 @@ void MainWindow::clearFileSearchIfNeeded(const QString& text) {
     }
     file_search_mode_ = false;
     current_file_query_.clear();
+    setFileStatus(QStringLiteral("搜索已清空，返回当前目录。"));
     file_service_.listFiles(current_file_path_);
 }
 
