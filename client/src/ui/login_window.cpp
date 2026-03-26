@@ -23,6 +23,7 @@
 #include <QJsonParseError>
 #include <QLoggingCategory>
 #include <QPixmap>
+#include <QTimer>
 
 // 日志分类：运行时可通过 QT_LOGGING_RULES="ui.login=true" 环境变量启用
 Q_LOGGING_CATEGORY(lcLogin, "ui.login")
@@ -319,15 +320,36 @@ void LoginWindow::connectSignals() {
                 ui_->loginStatusLabel->show();
                 resetLoginBtn();
 
-                if (!main_window_) {
-                    main_window_ = std::make_unique<MainWindow>(
-                        current_username_, friend_service_);
-                    connect(main_window_.get(), &MainWindow::windowClosed,
-                            this, [this] {
-                                tcp_client_.disconnectFromServer();
-                                QCoreApplication::quit();
+                main_window_.reset();
+                main_window_ = std::make_unique<MainWindow>(
+                    current_username_, friend_service_);
+                connect(main_window_.get(), &MainWindow::windowClosed,
+                        this, [this] {
+                            tcp_client_.disconnectFromServer();
+                            QCoreApplication::quit();
+                        });
+                connect(main_window_.get(), &MainWindow::logoutRequested,
+                        this, [this] {
+                            if (main_window_) {
+                                main_window_->hide();
+                            }
+
+                            tcp_client_.disconnectFromServer();
+                            current_user_id_ = 0;
+                            ui_->loginPasswordEdit->clear();
+                            ui_->loginStatusLabel->setText("已退出登录");
+                            ui_->loginStatusLabel->setStyleSheet("color: #16A34A;");
+                            ui_->loginStatusLabel->show();
+                            show();
+                            raise();
+                            activateWindow();
+
+                            QTimer::singleShot(120, this, [this] {
+                                if (server_config_loaded_) {
+                                    tcp_client_.connectToServer(server_host_, server_port_);
+                                }
                             });
-                }
+                        });
                 hide();
                 main_window_->show();
                 main_window_->raise();

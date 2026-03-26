@@ -15,16 +15,14 @@
 # ===========================================================
 
 # find_path()：在常见系统路径中查找包含 mysql.h 的目录。
-# NAMES：要查找的头文件名。
-# PATH_SUFFIXES：在标准路径下额外尝试的子目录。
+# NAMES：头文件名本身，配合 PATH_SUFFIXES=mysql 后能稳定返回
+#   /usr/include/mysql 这类真实包含目录，而不是 /usr/include。
 find_path(MySQL_INCLUDE_DIR
-    NAMES mysql/mysql.h
+    NAMES mysql.h
     PATH_SUFFIXES mysql
     PATHS
         /usr/include
         /usr/local/include
-        /usr/include/mysql
-        /usr/local/include/mysql
         /opt/homebrew/include          # macOS Homebrew
 )
 
