@@ -17,6 +17,7 @@ class QLabel;
 class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
+class QProgressBar;
 class QPushButton;
 class QFrame;
 class QTextEdit;
@@ -54,6 +55,8 @@ private:
     void navigateToFilePath(const QString& path);
     void openCurrentParentDirectory();
     void createDirectory();
+    void uploadFileFromLocal();
+    void downloadSelectedFile();
     void renameSelectedFile();
     void moveSelectedFile();
     void deleteSelectedFile();
@@ -103,14 +106,19 @@ private:
     QPushButton* file_back_btn_ = nullptr;
     QPushButton* file_refresh_btn_ = nullptr;
     QPushButton* file_create_btn_ = nullptr;
+    QPushButton* file_upload_btn_ = nullptr;
     QLabel* profile_name_label_ = nullptr;
     QLabel* profile_id_label_ = nullptr;
     QTextEdit* message_input_ = nullptr;
     QPushButton* logout_btn_ = nullptr;
     QPushButton* file_share_btn_ = nullptr;
+    QPushButton* file_download_btn_ = nullptr;
     QPushButton* file_rename_btn_ = nullptr;
     QPushButton* file_move_btn_ = nullptr;
     QPushButton* file_delete_btn_ = nullptr;
+    QLabel* file_transfer_hint_label_ = nullptr;
+    QProgressBar* upload_progress_bar_ = nullptr;
+    QProgressBar* download_progress_bar_ = nullptr;
 
     QLabel* detail_contact_name_label_ = nullptr;
     QLabel* detail_contact_status_label_ = nullptr;
