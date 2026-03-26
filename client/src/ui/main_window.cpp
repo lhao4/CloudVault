@@ -9,7 +9,6 @@
 #include "ui/share_file_dialog.h"
 
 #include <QCloseEvent>
-#include <QFileDialog>
 #include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
@@ -19,10 +18,8 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QMessageBox>
-#include <QProgressBar>
 #include <QPushButton>
 #include <QStackedWidget>
-#include <QStandardPaths>
 #include <QStyle>
 #include <QTextEdit>
 #include <QVBoxLayout>
@@ -221,25 +218,6 @@ QString mainWindowStyle() {
 
         QLabel#fileStatusLabel[error="true"] {
             color: #DC2626;
-        }
-
-        QLabel#fileTransferHintLabel {
-            color: #6B7280;
-            font-size: 12px;
-        }
-
-        QProgressBar {
-            min-height: 8px;
-            max-height: 8px;
-            border: none;
-            border-radius: 4px;
-            background: #E5E7EB;
-            text-align: center;
-        }
-
-        QProgressBar::chunk {
-            border-radius: 4px;
-            background: #3B82F6;
         }
 
         QLabel#fileEmptyStateLabel {
@@ -583,11 +561,13 @@ QWidget* createFileItemWidget(const cloudvault::FileEntry& entry,
 MainWindow::MainWindow(const QString& username,
                        cloudvault::FriendService& friend_service,
                        cloudvault::FileService& file_service,
+                       cloudvault::ShareService& share_service,
                        QWidget* parent)
     : QMainWindow(parent),
       current_username_(username),
       friend_service_(friend_service),
-      file_service_(file_service) {
+      file_service_(file_service),
+      share_service_(share_service) {
     setupUi();
     connectSignals();
     friend_service_.flushFriends();
@@ -768,12 +748,9 @@ void MainWindow::setupUi() {
         file_refresh_btn_->setObjectName(QStringLiteral("lightButton"));
         file_create_btn_ = new QPushButton(QStringLiteral("+ 新建"), toolbar);
         file_create_btn_->setObjectName(QStringLiteral("primaryButton"));
-        file_upload_btn_ = new QPushButton(QStringLiteral("⇪ 上传"), toolbar);
-        file_upload_btn_->setObjectName(QStringLiteral("lightButton"));
         toolbar_layout->addWidget(file_back_btn_);
         toolbar_layout->addWidget(file_refresh_btn_);
         toolbar_layout->addWidget(file_create_btn_);
-        toolbar_layout->addWidget(file_upload_btn_);
         page_layout->addWidget(toolbar);
 
         file_list_ = new QListWidget(page);
@@ -802,40 +779,21 @@ void MainWindow::setupUi() {
         detail_file_meta_label_->setWordWrap(true);
         selection_layout->addWidget(detail_file_meta_label_);
 
-        file_transfer_hint_label_ = new QLabel(QStringLiteral("上传和下载会显示在这里。"), selection_card);
-        file_transfer_hint_label_->setObjectName(QStringLiteral("fileTransferHintLabel"));
-        file_transfer_hint_label_->setWordWrap(true);
-        selection_layout->addWidget(file_transfer_hint_label_);
-
-        upload_progress_bar_ = new QProgressBar(selection_card);
-        upload_progress_bar_->setRange(0, 100);
-        upload_progress_bar_->setValue(0);
-        upload_progress_bar_->setTextVisible(false);
-        upload_progress_bar_->hide();
-        selection_layout->addWidget(upload_progress_bar_);
-
-        download_progress_bar_ = new QProgressBar(selection_card);
-        download_progress_bar_->setRange(0, 100);
-        download_progress_bar_->setValue(0);
-        download_progress_bar_->setTextVisible(false);
-        download_progress_bar_->hide();
-        selection_layout->addWidget(download_progress_bar_);
-
         auto* file_action_row = new QHBoxLayout();
         file_action_row->setSpacing(8);
-        file_download_btn_ = new QPushButton(QStringLiteral("⇩ 下载"), selection_card);
-        file_download_btn_->setObjectName(QStringLiteral("primaryButton"));
+        file_share_btn_ = new QPushButton(QStringLiteral("↗ 分享"), selection_card);
+        file_share_btn_->setObjectName(QStringLiteral("primaryButton"));
         file_rename_btn_ = new QPushButton(QStringLiteral("✏ 重命名"), selection_card);
         file_rename_btn_->setObjectName(QStringLiteral("lightButton"));
         file_move_btn_ = new QPushButton(QStringLiteral("✂ 移动"), selection_card);
         file_move_btn_->setObjectName(QStringLiteral("lightButton"));
         file_delete_btn_ = new QPushButton(QStringLiteral("🗑 删除"), selection_card);
         file_delete_btn_->setObjectName(QStringLiteral("dangerButton"));
-        file_action_row->addWidget(file_download_btn_);
+        file_action_row->addWidget(file_share_btn_);
         file_action_row->addWidget(file_rename_btn_);
         file_action_row->addWidget(file_move_btn_);
         file_action_row->addWidget(file_delete_btn_);
-        file_download_btn_->setEnabled(false);
+        file_share_btn_->setEnabled(false);
         file_rename_btn_->setEnabled(false);
         file_move_btn_->setEnabled(false);
         file_delete_btn_->setEnabled(false);
@@ -992,7 +950,6 @@ void MainWindow::connectSignals() {
                 }
             });
     connect(file_create_btn_, &QPushButton::clicked, this, &MainWindow::createDirectory);
-    connect(file_upload_btn_, &QPushButton::clicked, this, &MainWindow::uploadFileFromLocal);
     connect(file_search_edit_, &QLineEdit::returnPressed, this, &MainWindow::runFileSearch);
     connect(file_search_edit_, &QLineEdit::textChanged, this, &MainWindow::clearFileSearchIfNeeded);
     connect(file_list_, &QListWidget::itemSelectionChanged, this, &MainWindow::applySelectedFile);
@@ -1010,7 +967,7 @@ void MainWindow::connectSignals() {
     connect(file_rename_btn_, &QPushButton::clicked, this, &MainWindow::renameSelectedFile);
     connect(file_move_btn_, &QPushButton::clicked, this, &MainWindow::moveSelectedFile);
     connect(file_delete_btn_, &QPushButton::clicked, this, &MainWindow::deleteSelectedFile);
-    connect(file_download_btn_, &QPushButton::clicked, this, &MainWindow::downloadSelectedFile);
+    connect(file_share_btn_, &QPushButton::clicked, this, &MainWindow::openShareFileDialog);
 
     connect(&friend_service_, &cloudvault::FriendService::friendsRefreshed,
             this, &MainWindow::refreshFriendList);
@@ -1065,57 +1022,51 @@ void MainWindow::connectSignals() {
             this, [this](const QString& message) {
                 setFileStatus(message, true);
             });
-    connect(&file_service_, &cloudvault::FileService::uploadProgress,
-            this, [this](const QString& filename, quint64 sent, quint64 total) {
-                upload_progress_bar_->show();
-                const int progress = total == 0 ? 100
-                    : static_cast<int>((sent * 100) / total);
-                upload_progress_bar_->setValue(progress);
-                file_transfer_hint_label_->setText(
-                    QStringLiteral("正在上传 %1 · %2%")
-                        .arg(filename)
-                        .arg(progress));
-                setFileStatus(QStringLiteral("上传中：%1 / %2 字节").arg(sent).arg(total));
-            });
-    connect(&file_service_, &cloudvault::FileService::uploadFinished,
-            this, [this](const QString&, const QString& message) {
-                upload_progress_bar_->setValue(100);
-                file_transfer_hint_label_->setText(QStringLiteral("上传完成。"));
-                setFileStatus(message);
-                file_service_.listFiles(current_file_path_);
-            });
-    connect(&file_service_, &cloudvault::FileService::uploadFailed,
+    connect(&share_service_, &cloudvault::ShareService::shareRequestSent,
             this, [this](const QString& message) {
-                upload_progress_bar_->hide();
-                upload_progress_bar_->setValue(0);
-                file_transfer_hint_label_->setText(QStringLiteral("上传失败，请重试。"));
-                setFileStatus(message, true);
-            });
-    connect(&file_service_, &cloudvault::FileService::downloadProgress,
-            this, [this](const QString& filename, quint64 received, quint64 total) {
-                download_progress_bar_->show();
-                const int progress = total == 0 ? 100
-                    : static_cast<int>((received * 100) / total);
-                download_progress_bar_->setValue(progress);
-                file_transfer_hint_label_->setText(
-                    QStringLiteral("正在下载 %1 · %2%")
-                        .arg(filename)
-                        .arg(progress));
-                setFileStatus(QStringLiteral("下载中：%1 / %2 字节").arg(received).arg(total));
-            });
-    connect(&file_service_, &cloudvault::FileService::downloadFinished,
-            this, [this](const QString& local_path, const QString& message) {
-                download_progress_bar_->setValue(100);
-                file_transfer_hint_label_->setText(
-                    QStringLiteral("下载完成：%1").arg(local_path));
+                detail_file_meta_label_->setText(QStringLiteral("分享请求已发出，等待对方确认接收。"));
                 setFileStatus(message);
             });
-    connect(&file_service_, &cloudvault::FileService::downloadFailed,
+    connect(&share_service_, &cloudvault::ShareService::shareRequestFailed,
+            this, [this](const QString& reason) {
+                detail_file_meta_label_->setText(QStringLiteral("分享请求发送失败，请检查在线好友和文件状态。"));
+                setFileStatus(reason, true);
+            });
+    connect(&share_service_, &cloudvault::ShareService::incomingShareRequest,
+            this, [this](const QString& from, const QString& file_path) {
+                QMessageBox box(this);
+                box.setIcon(QMessageBox::Question);
+                box.setWindowTitle(QStringLiteral("收到文件分享"));
+                box.setText(QStringLiteral("%1 想与你共享文件").arg(from));
+                box.setInformativeText(
+                    QStringLiteral("文件：%1\n来源路径：%2\n接收后会复制到你的根目录。")
+                        .arg(QFileInfo(file_path).fileName(), file_path));
+                auto* accept_btn = box.addButton(QStringLiteral("接收"), QMessageBox::AcceptRole);
+                box.addButton(QStringLiteral("稍后处理"), QMessageBox::RejectRole);
+                box.exec();
+                if (box.clickedButton() == accept_btn) {
+                    setFileStatus(QStringLiteral("正在接收来自 %1 的分享…").arg(from));
+                    share_service_.acceptShare(from, file_path);
+                } else {
+                    setFileStatus(QStringLiteral("已保留来自 %1 的分享提示，等待下次处理。").arg(from));
+                }
+            });
+    connect(&share_service_, &cloudvault::ShareService::shareAccepted,
             this, [this](const QString& message) {
-                download_progress_bar_->hide();
-                download_progress_bar_->setValue(0);
-                file_transfer_hint_label_->setText(QStringLiteral("下载失败，请检查本地目录。"));
-                setFileStatus(message, true);
+                detail_file_target_label_->setText(QStringLiteral("选中：分享接收完成"));
+                detail_file_meta_label_->setText(QStringLiteral("文件已复制到你的根目录，可在文件页继续整理。"));
+                QMessageBox::information(this, QStringLiteral("已接收分享"), message);
+                file_search_mode_ = false;
+                current_file_query_.clear();
+                file_search_edit_->clear();
+                setFileStatus(QStringLiteral("分享接收成功，正在刷新根目录…"));
+                file_service_.listFiles(QStringLiteral("/"));
+            });
+    connect(&share_service_, &cloudvault::ShareService::shareAcceptFailed,
+            this, [this](const QString& reason) {
+                detail_file_meta_label_->setText(QStringLiteral("分享接收失败，请稍后重试。"));
+                setFileStatus(reason, true);
+                QMessageBox::warning(this, QStringLiteral("接收失败"), reason);
             });
 }
 
@@ -1269,7 +1220,7 @@ void MainWindow::updateFileSelectionState() {
 
     const bool has_selection = file_list_->currentItem() != nullptr;
     const bool is_file = has_selection && !selectedFileIsDir();
-    file_download_btn_->setEnabled(is_file);
+    file_share_btn_->setEnabled(is_file);
     file_rename_btn_->setEnabled(has_selection);
     file_move_btn_->setEnabled(has_selection);
     file_delete_btn_->setEnabled(has_selection);
@@ -1291,7 +1242,7 @@ void MainWindow::applySelectedFile() {
     detail_file_meta_label_->setText(
         is_dir
             ? QStringLiteral("目录 · 路径：%1\n双击可进入；支持重命名、移动、删除。").arg(path)
-            : QStringLiteral("文件 · 路径：%1\n支持下载、重命名、移动、删除。").arg(path));
+            : QStringLiteral("文件 · 路径：%1\n支持分享、重命名、移动、删除。").arg(path));
 }
 
 void MainWindow::navigateToFilePath(const QString& path) {
@@ -1333,44 +1284,6 @@ void MainWindow::createDirectory() {
     }
     setFileStatus(QStringLiteral("正在创建“%1”…").arg(name));
     file_service_.createDirectory(current_file_path_, name);
-}
-
-void MainWindow::uploadFileFromLocal() {
-    const QString start_dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-    const QString local_path = QFileDialog::getOpenFileName(
-        this,
-        QStringLiteral("选择要上传的文件"),
-        start_dir);
-    if (local_path.isEmpty()) {
-        return;
-    }
-
-    upload_progress_bar_->setValue(0);
-    upload_progress_bar_->show();
-    file_transfer_hint_label_->setText(QStringLiteral("准备上传…"));
-    setFileStatus(QStringLiteral("正在准备上传 %1 …").arg(QFileInfo(local_path).fileName()));
-    file_service_.uploadFile(local_path, current_file_path_);
-}
-
-void MainWindow::downloadSelectedFile() {
-    if (selectedFilePath().isEmpty() || selectedFileIsDir()) {
-        return;
-    }
-
-    const QString start_dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
-    const QString target_dir = QFileDialog::getExistingDirectory(
-        this,
-        QStringLiteral("选择下载目录"),
-        start_dir);
-    if (target_dir.isEmpty()) {
-        return;
-    }
-
-    download_progress_bar_->setValue(0);
-    download_progress_bar_->show();
-    file_transfer_hint_label_->setText(QStringLiteral("准备下载…"));
-    setFileStatus(QStringLiteral("正在准备下载 %1 …").arg(selectedFilePath()));
-    file_service_.downloadFile(selectedFilePath(), target_dir);
 }
 
 void MainWindow::renameSelectedFile() {
@@ -1492,12 +1405,22 @@ void MainWindow::openOnlineUserDialog() {
 }
 
 void MainWindow::openShareFileDialog() {
-    ShareFileDialog dialog(QStringLiteral("report.pdf"), friends_, this);
+    const QString path = selectedFilePath();
+    if (path.isEmpty() || selectedFileIsDir()) {
+        return;
+    }
+
+    const QString file_name = file_list_->currentItem()->data(Qt::UserRole + 2).toString();
+    ShareFileDialog dialog(file_name, friends_, this);
     connect(&dialog, &ShareFileDialog::shareConfirmed,
-            this, [this](const QString&, const QStringList& targets) {
+            this, [this, path](const QString&, const QStringList& targets) {
                 if (!targets.isEmpty()) {
                     detail_file_target_label_->setText(
                         QStringLiteral("已选择分享对象：%1").arg(targets.join(", ")));
+                    detail_file_meta_label_->setText(
+                        QStringLiteral("源文件：%1\n系统将向选中的在线好友发送接收确认。").arg(path));
+                    setFileStatus(QStringLiteral("正在发送 %1 的分享请求…").arg(QFileInfo(path).fileName()));
+                    share_service_.shareFile(path, targets);
                 }
             });
     dialog.exec();

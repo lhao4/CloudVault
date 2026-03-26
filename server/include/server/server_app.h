@@ -23,6 +23,7 @@
 #include "server/handler/auth_handler.h"
 #include "server/handler/friend_handler.h"
 #include "server/handler/file_handler.h"
+#include "server/handler/share_handler.h"
 
 #include <memory>
 #include <string>
@@ -56,4 +57,5 @@ private:
     std::unique_ptr<cloudvault::AuthHandler>   auth_handler_;
     std::unique_ptr<cloudvault::FriendHandler> friend_handler_;
     std::unique_ptr<cloudvault::FileHandler>   file_handler_;
+    std::unique_ptr<cloudvault::ShareHandler>  share_handler_;
 };

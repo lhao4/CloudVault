@@ -145,6 +145,7 @@ bool ServerApp::init(const std::string& config_path) {
     auth_handler_ = std::make_unique<cloudvault::AuthHandler>(*db_, sessions_);
     friend_handler_ = std::make_unique<cloudvault::FriendHandler>(*db_, sessions_);
     file_handler_ = std::make_unique<cloudvault::FileHandler>(sessions_, *file_storage_);
+    share_handler_ = std::make_unique<cloudvault::ShareHandler>(*db_, sessions_, *file_storage_);
 
     // ── 6. 初始化网络层（第七章）─────────────────────────────
     try {
@@ -167,8 +168,8 @@ bool ServerApp::init(const std::string& config_path) {
             spdlog::info("Client connected: {}", conn->peerAddr());
 
             conn->setCloseCallback([this](std::shared_ptr<cloudvault::TcpConnection> c) {
-                if (file_handler_) {
-                    file_handler_->handleConnectionClosed(c);
+                if (share_handler_) {
+                    share_handler_->handleConnectionClosed(c);
                 }
             });
 
@@ -323,37 +324,21 @@ void ServerApp::registerHandlers() {
             file_handler_->handleSearch(conn, hdr, body);
         });
 
-    // 文件传输（第十二章）
+    // 文件分享（第十三章）
     dispatcher_.registerHandler(
-        cloudvault::MessageType::UPLOAD_REQUEST,
+        cloudvault::MessageType::SHARE_REQUEST,
         [this](std::shared_ptr<cloudvault::TcpConnection> conn,
                const cloudvault::PDUHeader& hdr,
                const std::vector<uint8_t>& body) {
-            file_handler_->handleUploadRequest(conn, hdr, body);
+            share_handler_->handleShareRequest(conn, hdr, body);
         });
 
     dispatcher_.registerHandler(
-        cloudvault::MessageType::UPLOAD_DATA,
+        cloudvault::MessageType::SHARE_AGREE_REQUEST,
         [this](std::shared_ptr<cloudvault::TcpConnection> conn,
                const cloudvault::PDUHeader& hdr,
                const std::vector<uint8_t>& body) {
-            file_handler_->handleUploadData(conn, hdr, body);
-        });
-
-    dispatcher_.registerHandler(
-        cloudvault::MessageType::DOWNLOAD_REQUEST,
-        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
-               const cloudvault::PDUHeader& hdr,
-               const std::vector<uint8_t>& body) {
-            file_handler_->handleDownloadRequest(conn, hdr, body);
-        });
-
-    dispatcher_.registerHandler(
-        cloudvault::MessageType::DOWNLOAD_DATA,
-        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
-               const cloudvault::PDUHeader& hdr,
-               const std::vector<uint8_t>& body) {
-            file_handler_->handleDownloadData(conn, hdr, body);
+            share_handler_->handleShareAgree(conn, hdr, body);
         });
 }
 

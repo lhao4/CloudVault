@@ -22,7 +22,7 @@ public:
         std::string modified_at;
     };
 
-    struct TransferEntry {
+    struct FileInfo {
         std::string           name;
         std::string           path;
         std::filesystem::path absolute_path;
@@ -55,12 +55,16 @@ public:
     std::vector<Entry> search(const std::string& username,
                               const std::string& keyword) const;
 
-    TransferEntry inspectPath(const std::string& username,
-                              const std::string& target_path) const;
+    FileInfo inspectPath(const std::string& username,
+                         const std::string& target_path) const;
 
-    TransferEntry prepareUploadTarget(const std::string& username,
-                                      const std::string& dir_path,
-                                      const std::string& filename) const;
+    FileInfo prepareUploadTarget(const std::string& username,
+                                 const std::string& dir_path,
+                                 const std::string& filename) const;
+
+    std::string copyFileToUser(const std::string& owner_username,
+                               const std::string& source_path,
+                               const std::string& receiver_username) const;
 
 private:
     std::filesystem::path userRoot(const std::string& username) const;
