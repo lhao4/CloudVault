@@ -19,8 +19,8 @@
 | [第七章　建立连接——PING/PONG 联通](ch07-ping-pong.md) | TcpServer/TcpClient 联通与日志验证 | ✅ 已完成 |
 | [第八章　注册与登录](ch08-auth.md) | MySQL + AuthHandler + AuthService 闭环 | ✅ 已完成 |
 | [第九章　好友功能](ch09-friend.md) | 好友协议 + 三栏主界面 + 搜索/添加/列表/删除好友 | ✅ 已完成 |
-| [第十章　即时聊天](ch10-chat.md) | 在线聊天与离线消息 | 🔲 待写 |
-| [第十一章　文件管理](ch11-file-manager.md) | 目录与文件基础管理能力 | 🔲 待写 |
+| [第十章　即时聊天](ch10-chat.md) | 在线聊天与离线消息 | ✅ 待写 |
+| [第十一章　文件管理](ch11-file-manager.md) | 目录浏览 + 新建/重命名/移动/删除/搜索 | ✅ 已完成 |
 | [第十二章　文件传输（上传与下载）](ch12-file-transfer.md) | 分片上传下载与进度反馈 | 🔲 待写 |
 | [第十三章　文件分享](ch13-file-share.md) | 好友间文件分享与接收 | 🔲 待写 |
 
