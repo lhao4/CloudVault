@@ -22,6 +22,14 @@ public:
         std::string modified_at;
     };
 
+    struct TransferEntry {
+        std::string           name;
+        std::string           path;
+        std::filesystem::path absolute_path;
+        bool                  is_dir = false;
+        uint64_t              size = 0;
+    };
+
     explicit FileStorage(std::filesystem::path storage_root);
 
     void ensureUserRoot(const std::string& username) const;
@@ -46,6 +54,13 @@ public:
 
     std::vector<Entry> search(const std::string& username,
                               const std::string& keyword) const;
+
+    TransferEntry inspectPath(const std::string& username,
+                              const std::string& target_path) const;
+
+    TransferEntry prepareUploadTarget(const std::string& username,
+                                      const std::string& dir_path,
+                                      const std::string& filename) const;
 
 private:
     std::filesystem::path userRoot(const std::string& username) const;

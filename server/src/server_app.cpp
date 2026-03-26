@@ -166,6 +166,12 @@ bool ServerApp::init(const std::string& config_path) {
         [this](std::shared_ptr<cloudvault::TcpConnection> conn) {
             spdlog::info("Client connected: {}", conn->peerAddr());
 
+            conn->setCloseCallback([this](std::shared_ptr<cloudvault::TcpConnection> c) {
+                if (file_handler_) {
+                    file_handler_->handleConnectionClosed(c);
+                }
+            });
+
             // 设置消息回调：收到 PDU 时交给线程池处理
             conn->setMessageCallback(
                 [this](std::shared_ptr<cloudvault::TcpConnection> c,
@@ -315,6 +321,39 @@ void ServerApp::registerHandlers() {
                const cloudvault::PDUHeader& hdr,
                const std::vector<uint8_t>& body) {
             file_handler_->handleSearch(conn, hdr, body);
+        });
+
+    // 文件传输（第十二章）
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::UPLOAD_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleUploadRequest(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::UPLOAD_DATA,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleUploadData(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::DOWNLOAD_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleDownloadRequest(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::DOWNLOAD_DATA,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleDownloadData(conn, hdr, body);
         });
 }
 

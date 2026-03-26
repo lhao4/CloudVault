@@ -9,6 +9,7 @@
 #include "network/tcp_client.h"
 
 #include <QObject>
+#include <QFile>
 #include <QList>
 #include <QString>
 
@@ -38,6 +39,9 @@ public:
     void movePath(const QString& source_path, const QString& destination_path);
     void deletePath(const QString& target_path);
     void search(const QString& keyword);
+    void uploadFile(const QString& local_path, const QString& remote_dir_path);
+    void downloadFile(const QString& remote_file_path, const QString& local_dir_path);
+    bool hasActiveTransfer() const;
 
 signals:
     void filesListed(const QString& path, const cloudvault::FileEntries& entries);
@@ -46,6 +50,12 @@ signals:
     void searchFailed(const QString& reason);
     void fileOperationSucceeded(const QString& message);
     void fileOperationFailed(const QString& message);
+    void uploadProgress(const QString& filename, quint64 sent_bytes, quint64 total_bytes);
+    void uploadFinished(const QString& remote_path, const QString& message);
+    void uploadFailed(const QString& message);
+    void downloadProgress(const QString& filename, quint64 received_bytes, quint64 total_bytes);
+    void downloadFinished(const QString& local_path, const QString& message);
+    void downloadFailed(const QString& message);
 
 private:
     void onListResponse(const PDUHeader& hdr, const std::vector<uint8_t>& body);
@@ -54,12 +64,42 @@ private:
     void onMoveResponse(const PDUHeader& hdr, const std::vector<uint8_t>& body);
     void onDeleteResponse(const PDUHeader& hdr, const std::vector<uint8_t>& body);
     void onSearchResponse(const PDUHeader& hdr, const std::vector<uint8_t>& body);
+    void onUploadInitResponse(const PDUHeader& hdr, const std::vector<uint8_t>& body);
+    void onUploadResult(const PDUHeader& hdr, const std::vector<uint8_t>& body);
+    void onDownloadInitResponse(const PDUHeader& hdr, const std::vector<uint8_t>& body);
+    void onDownloadChunk(const PDUHeader& hdr, const std::vector<uint8_t>& body);
+    void uploadNextChunk();
+    void resetUploadContext();
+    void resetDownloadContext(bool remove_partial_file);
 
     TcpClient&      client_;
     ResponseRouter& router_;
 
     QString pending_list_path_;
     QString pending_search_keyword_;
+
+    struct UploadContext {
+        QFile file;
+        QString local_path;
+        QString remote_dir_path;
+        QString filename;
+        QString remote_file_path;
+        quint64 total_bytes = 0;
+        quint64 sent_bytes = 0;
+        bool waiting_for_server = false;
+    } upload_;
+
+    struct DownloadContext {
+        QFile file;
+        QString remote_file_path;
+        QString local_dir_path;
+        QString local_file_path;
+        QString filename;
+        quint64 total_bytes = 0;
+        quint64 received_bytes = 0;
+        bool waiting_for_init = false;
+        bool active = false;
+    } download_;
 };
 
 } // namespace cloudvault

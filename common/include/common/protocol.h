@@ -98,5 +98,6 @@ static_assert(sizeof(PDUHeader) == 16, "PDUHeader must be exactly 16 bytes");
 // ── 协议常量 ──────────────────────────────────────────────
 constexpr size_t PDU_HEADER_SIZE    = sizeof(PDUHeader);
 constexpr size_t PDU_MAX_BODY_SIZE  = 64u * 1024u * 1024u;  // 64 MB 上限
+constexpr size_t FILE_TRANSFER_CHUNK_SIZE = 4u * 1024u * 1024u;  // 4 MB
 
 } // namespace cloudvault
