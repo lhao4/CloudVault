@@ -14,6 +14,7 @@
 #include "common/protocol.h"
 #include "common/protocol_codec.h"
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -22,7 +23,6 @@
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QLoggingCategory>
-#include <QPixmap>
 #include <QTimer>
 
 // 日志分类：运行时可通过 QT_LOGGING_RULES="ui.login=true" 环境变量启用
@@ -67,6 +67,7 @@ LoginWindow::LoginWindow(QWidget* parent)
     : QWidget(parent)
     , ui_(std::make_unique<Ui::LoginWindow>())
     , auth_service_(tcp_client_, router_, this)
+    , chat_service_(tcp_client_, router_, this)
     , friend_service_(tcp_client_, router_, this)
     , file_service_(tcp_client_, router_, this)
     , share_service_(tcp_client_, router_, this)
@@ -75,8 +76,7 @@ LoginWindow::LoginWindow(QWidget* parent)
 
     setMinimumSize(400, 560);
     resize(400, 560);
-
-    ui_->iconLabel->setPixmap(QPixmap(":/icons/app_icon.png"));
+    setWindowIcon(QApplication::windowIcon());
 
     setupStyle();
     connectSignals();
@@ -316,7 +316,7 @@ void LoginWindow::connectSignals() {
 
     connect(&auth_service_, &cloudvault::AuthService::loginSuccess,
             this, [this](int userId) {
-                current_user_id_ = userId;
+                Q_UNUSED(userId);
                 ui_->loginStatusLabel->setText("登录成功");
                 ui_->loginStatusLabel->setStyleSheet("color: #16A34A;");
                 ui_->loginStatusLabel->show();
@@ -324,9 +324,10 @@ void LoginWindow::connectSignals() {
 
                 main_window_.reset();
                 main_window_ = std::make_unique<MainWindow>(
-                    current_username_, friend_service_, file_service_, share_service_);
+                    current_username_, chat_service_, friend_service_, file_service_, share_service_);
                 connect(main_window_.get(), &MainWindow::windowClosed,
                         this, [this] {
+                            auth_service_.logout();
                             tcp_client_.disconnectFromServer();
                             QCoreApplication::quit();
                         });
@@ -336,8 +337,8 @@ void LoginWindow::connectSignals() {
                                 main_window_->hide();
                             }
 
+                            auth_service_.logout();
                             tcp_client_.disconnectFromServer();
-                            current_user_id_ = 0;
                             ui_->loginPasswordEdit->clear();
                             ui_->loginStatusLabel->setText("已退出登录");
                             ui_->loginStatusLabel->setStyleSheet("color: #16A34A;");
@@ -397,7 +398,6 @@ void LoginWindow::onLoginClicked() {
 // =============================================================
 void LoginWindow::onRegisterClicked() {
     const QString username     = ui_->regUsernameEdit->text().trimmed();
-    const QString display_name = ui_->regDisplayNameEdit->text().trimmed();
     const QString password     = ui_->regPasswordEdit->text();
     const QString confirm      = ui_->regConfirmEdit->text();
 
@@ -407,9 +407,9 @@ void LoginWindow::onRegisterClicked() {
     };
 
     // 密码本身不 trim，但用 trimmed().isEmpty() 检测仅含空格的无效输入
-    if (username.isEmpty() || display_name.isEmpty() ||
+    if (username.isEmpty() ||
         password.trimmed().isEmpty() || confirm.trimmed().isEmpty()) {
-        showError("所有字段均为必填项");
+        showError("用户名和密码均为必填项");
         return;
     }
 
@@ -432,7 +432,7 @@ void LoginWindow::onRegisterClicked() {
     ui_->regBtn->setEnabled(false);
     ui_->regBtn->setText("注册中…");
 
-    qCDebug(lcLogin) << "准备注册：用户名 =" << username << "昵称 =" << display_name;
+    qCDebug(lcLogin) << "准备注册：用户名 =" << username;
     auth_service_.registerUser(username, password);
 }
 

@@ -13,6 +13,7 @@
 #include "network/tcp_client.h"
 #include "network/response_router.h"
 #include "network/auth_service.h"
+#include "network/chat_service.h"
 #include "network/friend_service.h"
 #include "network/file_service.h"
 #include "network/share_service.h"
@@ -65,7 +66,6 @@ private:
     quint16 server_port_ = 0;
     bool server_config_loaded_ = false;
     QString current_username_;
-    int     current_user_id_ = 0;
 
     // 网络层（第七章）
     cloudvault::TcpClient      tcp_client_;
@@ -73,6 +73,7 @@ private:
 
     // 认证服务（第八章）
     cloudvault::AuthService    auth_service_;
+    cloudvault::ChatService    chat_service_;
     cloudvault::FriendService  friend_service_;
     cloudvault::FileService    file_service_;
     cloudvault::ShareService   share_service_;

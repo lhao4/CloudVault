@@ -71,6 +71,11 @@ void AuthService::login(const QString& username, const QString& password) {
     client_.send(std::move(pdu));
 }
 
+void AuthService::logout() {
+    qCDebug(lcAuth) << "Sending LOGOUT";
+    client_.send(PDUBuilder(MessageType::LOGOUT).build());
+}
+
 // =============================================================
 // onRegisterResponse()：解析注册响应
 // Body: status(uint8) + message(string)

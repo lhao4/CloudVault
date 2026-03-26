@@ -40,7 +40,7 @@ public:
     void deletePath(const QString& target_path);
     void search(const QString& keyword);
     void uploadFile(const QString& local_path, const QString& remote_dir_path);
-    void downloadFile(const QString& remote_file_path, const QString& local_dir_path);
+    void downloadFile(const QString& remote_file_path, const QString& local_save_path);
     bool hasActiveTransfer() const;
 
 signals:
@@ -75,9 +75,6 @@ private:
     TcpClient&      client_;
     ResponseRouter& router_;
 
-    QString pending_list_path_;
-    QString pending_search_keyword_;
-
     struct UploadContext {
         QFile file;
         QString local_path;
@@ -92,7 +89,7 @@ private:
     struct DownloadContext {
         QFile file;
         QString remote_file_path;
-        QString local_dir_path;
+        QString local_save_path;
         QString local_file_path;
         QString filename;
         quint64 total_bytes = 0;

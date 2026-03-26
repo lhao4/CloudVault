@@ -13,6 +13,7 @@
 class QListWidget;
 class QPushButton;
 class QLineEdit;
+class QLabel;
 
 class OnlineUserDialog : public QDialog {
     Q_OBJECT
@@ -32,6 +33,7 @@ private:
     void populateList(const QString& keyword = QString());
 
     QList<QPair<QString, bool>> users_;
+    QLabel* title_label_ = nullptr;
     QLineEdit* search_edit_ = nullptr;
     QListWidget* user_list_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;

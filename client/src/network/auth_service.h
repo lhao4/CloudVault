@@ -33,6 +33,9 @@ public:
     // 发起登录请求（在 Qt 主线程调用）
     void login(const QString& username, const QString& password);
 
+    // 主动登出
+    void logout();
+
 signals:
     // 注册结果
     void registerSuccess();
