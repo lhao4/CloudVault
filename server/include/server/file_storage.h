@@ -22,6 +22,14 @@ public:
         std::string modified_at;
     };
 
+    struct FileInfo {
+        std::string           name;
+        std::string           path;
+        std::filesystem::path absolute_path;
+        bool                  is_dir = false;
+        uint64_t              size = 0;
+    };
+
     explicit FileStorage(std::filesystem::path storage_root);
 
     void ensureUserRoot(const std::string& username) const;
@@ -46,6 +54,13 @@ public:
 
     std::vector<Entry> search(const std::string& username,
                               const std::string& keyword) const;
+
+    FileInfo inspectPath(const std::string& username,
+                         const std::string& target_path) const;
+
+    std::string copyFileToUser(const std::string& owner_username,
+                               const std::string& source_path,
+                               const std::string& receiver_username) const;
 
 private:
     std::filesystem::path userRoot(const std::string& username) const;

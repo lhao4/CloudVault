@@ -179,6 +179,52 @@ std::vector<FileStorage::Entry> FileStorage::search(const std::string& username,
     return results;
 }
 
+FileStorage::FileInfo FileStorage::inspectPath(const std::string& username,
+                                               const std::string& target_path) const {
+    const auto root = std::filesystem::weakly_canonical(userRoot(username));
+    const auto absolute = resolvePath(username, target_path);
+
+    FileInfo info;
+    info.name = absolute.filename().string();
+    info.path = toRelativePath(root, absolute);
+    info.absolute_path = absolute;
+    info.is_dir = std::filesystem::is_directory(absolute);
+    if (!info.is_dir) {
+        std::error_code ec;
+        info.size = std::filesystem::file_size(absolute, ec);
+        if (ec) {
+            info.size = 0;
+        }
+    }
+    return info;
+}
+
+std::string FileStorage::copyFileToUser(const std::string& owner_username,
+                                        const std::string& source_path,
+                                        const std::string& receiver_username) const {
+    const auto source = inspectPath(owner_username, source_path);
+    if (source.is_dir) {
+        throw std::runtime_error("当前只支持分享普通文件");
+    }
+
+    ensureUserRoot(receiver_username);
+    const auto receiver_root = std::filesystem::weakly_canonical(userRoot(receiver_username));
+    const auto target = (receiver_root / source.name).lexically_normal();
+    ensureInsideRoot(receiver_root, target);
+
+    if (std::filesystem::exists(target)) {
+        throw std::runtime_error("接收方根目录已存在同名文件");
+    }
+
+    std::error_code ec;
+    std::filesystem::copy_file(source.absolute_path, target, ec);
+    if (ec) {
+        throw std::runtime_error("复制文件失败");
+    }
+
+    return toRelativePath(receiver_root, target);
+}
+
 std::filesystem::path FileStorage::userRoot(const std::string& username) const {
     return storage_root_ / username;
 }

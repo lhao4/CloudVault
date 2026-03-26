@@ -145,6 +145,7 @@ bool ServerApp::init(const std::string& config_path) {
     auth_handler_ = std::make_unique<cloudvault::AuthHandler>(*db_, sessions_);
     friend_handler_ = std::make_unique<cloudvault::FriendHandler>(*db_, sessions_);
     file_handler_ = std::make_unique<cloudvault::FileHandler>(sessions_, *file_storage_);
+    share_handler_ = std::make_unique<cloudvault::ShareHandler>(*db_, sessions_, *file_storage_);
 
     // ── 6. 初始化网络层（第七章）─────────────────────────────
     try {
@@ -165,6 +166,12 @@ bool ServerApp::init(const std::string& config_path) {
     tcp_server_->setNewConnectionCallback(
         [this](std::shared_ptr<cloudvault::TcpConnection> conn) {
             spdlog::info("Client connected: {}", conn->peerAddr());
+
+            conn->setCloseCallback([this](std::shared_ptr<cloudvault::TcpConnection> c) {
+                if (share_handler_) {
+                    share_handler_->handleConnectionClosed(c);
+                }
+            });
 
             // 设置消息回调：收到 PDU 时交给线程池处理
             conn->setMessageCallback(
@@ -315,6 +322,23 @@ void ServerApp::registerHandlers() {
                const cloudvault::PDUHeader& hdr,
                const std::vector<uint8_t>& body) {
             file_handler_->handleSearch(conn, hdr, body);
+        });
+
+    // 文件分享（第十三章）
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::SHARE_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            share_handler_->handleShareRequest(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::SHARE_AGREE_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            share_handler_->handleShareAgree(conn, hdr, body);
         });
 }
 
