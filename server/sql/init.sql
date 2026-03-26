@@ -57,6 +57,19 @@ CREATE TABLE IF NOT EXISTS chat_message (
     KEY idx_time     (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='聊天记录表';
 
+-- ── 离线消息表（第十章）──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS offline_message (
+    id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    sender_id   INT          NOT NULL COMMENT '发送者ID',
+    receiver_id INT          NOT NULL COMMENT '接收者ID',
+    msg_type    INT          NOT NULL COMMENT '消息类型',
+    content     TEXT         NOT NULL COMMENT '消息内容',
+    created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    delivered   TINYINT      NOT NULL DEFAULT 0 COMMENT '是否已投递',
+    KEY idx_receiver_undelivered (receiver_id, delivered),
+    KEY idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='离线消息表';
+
 -- ── 文件元数据表（第十一章）──────────────────────────────────
 CREATE TABLE IF NOT EXISTS file_info (
     file_id     INT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
