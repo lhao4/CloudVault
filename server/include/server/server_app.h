@@ -19,9 +19,10 @@
 #include "server/message_dispatcher.h"
 #include "server/session_manager.h"
 #include "server/db/database.h"
+#include "server/file_storage.h"
 #include "server/handler/auth_handler.h"
 #include "server/handler/friend_handler.h"
-#include "server/handler/chat_handler.h"
+#include "server/handler/file_handler.h"
 
 #include <memory>
 #include <string>
@@ -50,8 +51,9 @@ private:
 
     // 第八章：数据层 + 会话
     std::unique_ptr<cloudvault::Database>      db_;
+    std::unique_ptr<cloudvault::FileStorage>   file_storage_;
     cloudvault::SessionManager                 sessions_;
     std::unique_ptr<cloudvault::AuthHandler>   auth_handler_;
     std::unique_ptr<cloudvault::FriendHandler> friend_handler_;
-    std::unique_ptr<cloudvault::ChatHandler>   chat_handler_;
+    std::unique_ptr<cloudvault::FileHandler>   file_handler_;
 };

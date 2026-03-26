@@ -26,15 +26,6 @@ using json = nlohmann::json;
 // ── 全局 shutdown 标志（信号处理函数设置）────────────────────────
 static std::atomic<bool> g_shutdown{false};
 
-static std::filesystem::path resolveConfigRelativePath(const std::string& config_path,
-                                                       const std::string& raw_path) {
-    const auto path = std::filesystem::path(raw_path);
-    if (path.is_absolute()) {
-        return path;
-    }
-    return (std::filesystem::path(config_path).parent_path() / path).lexically_normal();
-}
-
 static void onSignal(int sig) {
     spdlog::info("收到信号 {}，准备关闭...", sig);
     g_shutdown.store(true);
@@ -72,17 +63,15 @@ bool ServerApp::init(const std::string& config_path) {
     using jp = json::json_pointer;
 
     const std::string log_level = cfg.value(jp("/log/level"), std::string("info"));
-    const auto log_file = resolveConfigRelativePath(
-        config_path, cfg.value(jp("/log/file"), std::string("../logs/server.log")));
+    const std::string log_file  = cfg.value(jp("/log/file"),  std::string("logs/server.log"));
 
     try {
-        if (!log_file.parent_path().empty()) {
-            std::filesystem::create_directories(log_file.parent_path());
-        }
+        std::filesystem::create_directories(
+            std::filesystem::path(log_file).parent_path());
 
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         auto file_sink    = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-            log_file.string(), 10 * 1024 * 1024, 3);
+            log_file, 10 * 1024 * 1024, 3);
 
         auto logger = std::make_shared<spdlog::logger>(
             "server",
@@ -114,7 +103,6 @@ bool ServerApp::init(const std::string& config_path) {
     spdlog::info("文件存储  : {}", storage_root);
     spdlog::info("数据库    : {}:{}/{}", db_host, db_port, db_name);
     spdlog::info("日志级别  : {}", log_level);
-    spdlog::info("日志文件  : {}", log_file.string());
 
     // ── 5. 初始化数据库连接池（第八章）──────────────────────
     const std::string db_user = cfg.value(jp("/database/user"), std::string("root"));
@@ -153,9 +141,10 @@ bool ServerApp::init(const std::string& config_path) {
         return false;
     }
 
+    file_storage_ = std::make_unique<cloudvault::FileStorage>(storage_root);
     auth_handler_ = std::make_unique<cloudvault::AuthHandler>(*db_, sessions_);
     friend_handler_ = std::make_unique<cloudvault::FriendHandler>(*db_, sessions_);
-    chat_handler_ = std::make_unique<cloudvault::ChatHandler>(*db_, sessions_);
+    file_handler_ = std::make_unique<cloudvault::FileHandler>(sessions_, *file_storage_);
 
     // ── 6. 初始化网络层（第七章）─────────────────────────────
     try {
@@ -279,21 +268,53 @@ void ServerApp::registerHandlers() {
             friend_handler_->handleDeleteFriend(conn, hdr, body);
         });
 
-    // 聊天（第十章）
+    // 文件管理（第十一章）
     dispatcher_.registerHandler(
-        cloudvault::MessageType::CHAT,
+        cloudvault::MessageType::FLUSH_FILE,
         [this](std::shared_ptr<cloudvault::TcpConnection> conn,
                const cloudvault::PDUHeader& hdr,
                const std::vector<uint8_t>& body) {
-            chat_handler_->handleChat(conn, hdr, body);
+            file_handler_->handleList(conn, hdr, body);
         });
 
     dispatcher_.registerHandler(
-        cloudvault::MessageType::GET_HISTORY,
+        cloudvault::MessageType::MKDIR,
         [this](std::shared_ptr<cloudvault::TcpConnection> conn,
                const cloudvault::PDUHeader& hdr,
                const std::vector<uint8_t>& body) {
-            chat_handler_->handleGetHistory(conn, hdr, body);
+            file_handler_->handleMkdir(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::RENAME,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleRename(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::MOVE,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleMove(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::DELETE_FILE,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleDelete(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::SEARCH_FILE,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleSearch(conn, hdr, body);
         });
 }
 
@@ -339,7 +360,8 @@ void ServerApp::shutdown() {
     event_loop_.reset();
 
     auth_handler_.reset();
-    chat_handler_.reset();
+    file_handler_.reset();
+    file_storage_.reset();
     db_.reset();
 
     spdlog::info("CloudVault Server 已关闭，Bye.");

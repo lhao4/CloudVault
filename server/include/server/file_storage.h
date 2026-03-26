@@ -1,15 +1,69 @@
 // =============================================================
 // server/include/server/file_storage.h
-// TODO（第八章）：服务端文件系统操作封装
-//
-// 职责：
-//   - 用户注册时创建个人目录（storage_root/username/）
-//   - 封装 mkdir、move、delete、rename、list、search 操作
-//   - 路径合法性校验：防止路径穿越（../ 攻击）
-//     所有路径先 weakly_canonical，再验证是否以 user_root 为前缀
-//   - 分块上传临时文件管理（.tmp 后缀，完成后重命名）
+// 第十一章：文件系统操作封装
 // =============================================================
 
 #pragma once
 
-// TODO（第八章）：实现 FileStorage 类
+#include <cstdint>
+#include <filesystem>
+#include <string>
+#include <vector>
+
+namespace cloudvault {
+
+class FileStorage {
+public:
+    struct Entry {
+        std::string name;
+        std::string path;         // 相对用户根目录的路径，以 / 开头
+        bool        is_dir = false;
+        uint64_t    size = 0;
+        std::string modified_at;
+    };
+
+    explicit FileStorage(std::filesystem::path storage_root);
+
+    void ensureUserRoot(const std::string& username) const;
+
+    std::vector<Entry> list(const std::string& username,
+                            const std::string& dir_path) const;
+
+    void createDirectory(const std::string& username,
+                         const std::string& parent_path,
+                         const std::string& dir_name) const;
+
+    void renamePath(const std::string& username,
+                    const std::string& target_path,
+                    const std::string& new_name) const;
+
+    void movePath(const std::string& username,
+                  const std::string& source_path,
+                  const std::string& destination_path) const;
+
+    void deletePath(const std::string& username,
+                    const std::string& target_path) const;
+
+    std::vector<Entry> search(const std::string& username,
+                              const std::string& keyword) const;
+
+private:
+    std::filesystem::path userRoot(const std::string& username) const;
+    std::filesystem::path resolvePath(const std::string& username,
+                                      const std::string& relative_path,
+                                      bool allow_missing_leaf = false) const;
+    std::string toRelativePath(const std::filesystem::path& username_root,
+                               const std::filesystem::path& absolute_path) const;
+    Entry buildEntry(const std::filesystem::directory_entry& entry,
+                     const std::filesystem::path& username_root) const;
+
+    static std::string normalizeLogicalPath(const std::string& path);
+    static std::string formatTimestamp(const std::filesystem::file_time_type& tp);
+    static void validateName(const std::string& name);
+    static void ensureInsideRoot(const std::filesystem::path& root,
+                                 const std::filesystem::path& candidate);
+
+    std::filesystem::path storage_root_;
+};
+
+} // namespace cloudvault
