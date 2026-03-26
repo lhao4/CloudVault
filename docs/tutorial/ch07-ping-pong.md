@@ -294,8 +294,8 @@ void TcpClient::onReadyRead() {
 # 服务端（WSL）
 cmake -B ~/cv-server-build -S /mnt/d/CloudVault/server -G Ninja
 cmake --build ~/cv-server-build
-cp server/config/server.example.json server.json
-~/cv-server-build/cloudvault_server server.json
+cp server/config/server.example.json server/config/server.json
+~/cv-server-build/cloudvault_server /mnt/d/CloudVault/server/config/server.json
 ```
 
 预期输出：

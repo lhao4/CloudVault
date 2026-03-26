@@ -44,8 +44,10 @@ private:
     void refreshFriendList(const QList<QPair<QString, bool>>& friends);
     void filterFriendList(const QString& keyword);
     void updateContactSelectionState();
+    void updateDeleteFriendAction();
     void applySelectedFriend();
     void switchMainTab(int index);
+    void confirmDeleteSelectedFriend();
     void openOnlineUserDialog();
     void openShareFileDialog();
     QString selectedFriend() const;
@@ -79,6 +81,7 @@ private:
     QTextEdit* message_input_ = nullptr;
     QPushButton* logout_btn_ = nullptr;
     QPushButton* file_share_btn_ = nullptr;
+    QPushButton* delete_friend_btn_ = nullptr;
 
     QLabel* detail_contact_name_label_ = nullptr;
     QLabel* detail_contact_status_label_ = nullptr;

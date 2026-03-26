@@ -26,6 +26,15 @@ using json = nlohmann::json;
 // ── 全局 shutdown 标志（信号处理函数设置）────────────────────────
 static std::atomic<bool> g_shutdown{false};
 
+static std::filesystem::path resolveConfigRelativePath(const std::string& config_path,
+                                                       const std::string& raw_path) {
+    const auto path = std::filesystem::path(raw_path);
+    if (path.is_absolute()) {
+        return path;
+    }
+    return (std::filesystem::path(config_path).parent_path() / path).lexically_normal();
+}
+
 static void onSignal(int sig) {
     spdlog::info("收到信号 {}，准备关闭...", sig);
     g_shutdown.store(true);
@@ -63,15 +72,17 @@ bool ServerApp::init(const std::string& config_path) {
     using jp = json::json_pointer;
 
     const std::string log_level = cfg.value(jp("/log/level"), std::string("info"));
-    const std::string log_file  = cfg.value(jp("/log/file"),  std::string("logs/server.log"));
+    const auto log_file = resolveConfigRelativePath(
+        config_path, cfg.value(jp("/log/file"), std::string("../logs/server.log")));
 
     try {
-        std::filesystem::create_directories(
-            std::filesystem::path(log_file).parent_path());
+        if (!log_file.parent_path().empty()) {
+            std::filesystem::create_directories(log_file.parent_path());
+        }
 
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
         auto file_sink    = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-            log_file, 10 * 1024 * 1024, 3);
+            log_file.string(), 10 * 1024 * 1024, 3);
 
         auto logger = std::make_shared<spdlog::logger>(
             "server",
@@ -103,6 +114,7 @@ bool ServerApp::init(const std::string& config_path) {
     spdlog::info("文件存储  : {}", storage_root);
     spdlog::info("数据库    : {}:{}/{}", db_host, db_port, db_name);
     spdlog::info("日志级别  : {}", log_level);
+    spdlog::info("日志文件  : {}", log_file.string());
 
     // ── 5. 初始化数据库连接池（第八章）──────────────────────
     const std::string db_user = cfg.value(jp("/database/user"), std::string("root"));

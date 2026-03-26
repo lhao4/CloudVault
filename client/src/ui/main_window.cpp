@@ -150,6 +150,12 @@ QString mainWindowStyle() {
             background: #FEE2E2;
         }
 
+        QPushButton#dangerButton:disabled {
+            background: #F8FAFC;
+            color: #C4CAD4;
+            border-color: #E5E7EB;
+        }
+
         QListWidget#contactList {
             border: none;
             outline: none;
@@ -770,6 +776,10 @@ void MainWindow::setupUi() {
     contact_layout->addWidget(contact_title);
     contact_layout->addWidget(detail_contact_name_label_);
     contact_layout->addWidget(detail_contact_status_label_);
+    delete_friend_btn_ = new QPushButton(QStringLiteral("删除好友"), contact_card);
+    delete_friend_btn_->setObjectName(QStringLiteral("dangerButton"));
+    delete_friend_btn_->setEnabled(false);
+    contact_layout->addWidget(delete_friend_btn_);
     detail_layout->addWidget(contact_card);
 
     auto* shared_title = new QLabel(QStringLiteral("共享文件"), detail_panel_);
@@ -819,6 +829,8 @@ void MainWindow::connectSignals() {
 
     connect(logout_btn_, &QPushButton::clicked, this, &MainWindow::logoutRequested);
     connect(file_share_btn_, &QPushButton::clicked, this, &MainWindow::openShareFileDialog);
+    connect(delete_friend_btn_, &QPushButton::clicked,
+            this, &MainWindow::confirmDeleteSelectedFriend);
 
     connect(&friend_service_, &cloudvault::FriendService::friendsRefreshed,
             this, &MainWindow::refreshFriendList);
@@ -834,6 +846,10 @@ void MainWindow::connectSignals() {
     connect(&friend_service_, &cloudvault::FriendService::friendAddFailed,
             this, [this](const QString& reason) {
                 QMessageBox::warning(this, QStringLiteral("添加失败"), reason);
+            });
+    connect(&friend_service_, &cloudvault::FriendService::friendDeleteFailed,
+            this, [this](const QString& reason) {
+                QMessageBox::warning(this, QStringLiteral("删除失败"), reason);
             });
     connect(&friend_service_, &cloudvault::FriendService::incomingFriendRequest,
             this, [this](const QString& from) {
@@ -898,6 +914,7 @@ void MainWindow::filterFriendList(const QString& keyword) {
     }
 
     updateContactSelectionState();
+    updateDeleteFriendAction();
 }
 
 void MainWindow::updateContactSelectionState() {
@@ -917,11 +934,27 @@ void MainWindow::updateContactSelectionState() {
     }
 }
 
+void MainWindow::updateDeleteFriendAction() {
+    if (!delete_friend_btn_) {
+        return;
+    }
+
+    const QString username = selectedFriend();
+    delete_friend_btn_->setEnabled(!username.isEmpty());
+    if (username.isEmpty()) {
+        delete_friend_btn_->setText(QStringLiteral("删除好友"));
+        return;
+    }
+
+    delete_friend_btn_->setText(QStringLiteral("删除 %1").arg(username));
+}
+
 void MainWindow::applySelectedFriend() {
     updateContactSelectionState();
 
     const QString username = selectedFriend();
     if (username.isEmpty()) {
+        updateDeleteFriendAction();
         return;
     }
 
@@ -933,6 +966,7 @@ void MainWindow::applySelectedFriend() {
         online ? QStringLiteral("在线 · 可直接聊天")
                : QStringLiteral("离线 · 静默等待状态更新"));
     file_path_label_->setText(QStringLiteral("📁 /%1/").arg(username));
+    updateDeleteFriendAction();
 }
 
 void MainWindow::switchMainTab(int index) {
@@ -958,6 +992,25 @@ void MainWindow::switchMainTab(int index) {
         sidebar_panel_->hide();
         detail_panel_->hide();
     }
+}
+
+void MainWindow::confirmDeleteSelectedFriend() {
+    const QString username = selectedFriend();
+    if (username.isEmpty()) {
+        return;
+    }
+
+    const auto reply = QMessageBox::question(
+        this,
+        QStringLiteral("删除好友"),
+        QStringLiteral("确认删除好友 %1 吗？\n删除后双方好友列表都会移除彼此。").arg(username),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+    if (reply != QMessageBox::Yes) {
+        return;
+    }
+
+    friend_service_.deleteFriend(username);
 }
 
 void MainWindow::openOnlineUserDialog() {

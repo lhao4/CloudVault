@@ -77,6 +77,7 @@ compile_commands.json
 # Server 运行时产物
 # ───────────────────────────────────────────
 logs/
+server.json
 server/logs/
 server/filesys/
 server/config/server.json

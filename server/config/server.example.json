@@ -1,7 +1,7 @@
 {
     "server": {
         "host": "0.0.0.0",
-        "port": 5000,
+        "port": 5001,
         "thread_count": 8
     },
     "database": {
@@ -20,6 +20,6 @@
     },
     "log": {
         "level": "info",
-        "file":  "logs/server.log"
+        "file":  "../logs/server.log"
     }
 }
