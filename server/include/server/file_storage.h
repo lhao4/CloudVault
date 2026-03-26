@@ -58,6 +58,10 @@ public:
     FileInfo inspectPath(const std::string& username,
                          const std::string& target_path) const;
 
+    FileInfo prepareUploadTarget(const std::string& username,
+                                 const std::string& dir_path,
+                                 const std::string& filename) const;
+
     std::string copyFileToUser(const std::string& owner_username,
                                const std::string& source_path,
                                const std::string& receiver_username) const;
