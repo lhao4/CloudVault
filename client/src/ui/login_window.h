@@ -14,6 +14,7 @@
 #include "network/response_router.h"
 #include "network/auth_service.h"
 #include "network/friend_service.h"
+#include "network/file_service.h"
 
 #include <QString>
 #include <QWidget>
@@ -72,4 +73,5 @@ private:
     // 认证服务（第八章）
     cloudvault::AuthService    auth_service_;
     cloudvault::FriendService  friend_service_;
+    cloudvault::FileService    file_service_;
 };

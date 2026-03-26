@@ -11,6 +11,7 @@
 #include <QCloseEvent>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -171,6 +172,41 @@ QString mainWindowStyle() {
         QFrame#contactItem[selected="true"] {
             background: #EFF6FF;
             border-color: #BFDBFE;
+        }
+
+        QListWidget#fileList {
+            border: none;
+            outline: none;
+            background: transparent;
+        }
+
+        QListWidget#fileList::item {
+            margin-bottom: 8px;
+            border: none;
+            padding: 0;
+        }
+
+        QFrame#fileItem {
+            background: #FFFFFF;
+            border: 1px solid #E2E6EA;
+            border-radius: 12px;
+        }
+
+        QFrame#fileItem[selected="true"] {
+            background: #EFF6FF;
+            border-color: #93C5FD;
+        }
+
+        QLabel#fileNameLabel {
+            color: #111827;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        QLabel#fileMetaLabel,
+        QLabel#filePathHintLabel {
+            color: #6B7280;
+            font-size: 12px;
         }
 
         QFrame#contactAccent {
@@ -443,17 +479,76 @@ void repolish(QWidget* widget) {
     widget->update();
 }
 
+QString formatFileSize(quint64 size) {
+    static const char* units[] = {"B", "KB", "MB", "GB"};
+    double value = static_cast<double>(size);
+    int unit_index = 0;
+    while (value >= 1024.0 && unit_index < 3) {
+        value /= 1024.0;
+        ++unit_index;
+    }
+    if (unit_index == 0) {
+        return QStringLiteral("%1 %2").arg(static_cast<qulonglong>(size)).arg(units[unit_index]);
+    }
+    return QStringLiteral("%1 %2")
+        .arg(QString::number(value, 'f', value >= 10.0 ? 1 : 2))
+        .arg(units[unit_index]);
+}
+
+QWidget* createFileItemWidget(const cloudvault::FileEntry& entry,
+                              bool selected,
+                              QWidget* parent = nullptr) {
+    auto* frame = new QFrame(parent);
+    frame->setObjectName(QStringLiteral("fileItem"));
+    frame->setProperty("selected", selected);
+
+    auto* layout = new QHBoxLayout(frame);
+    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setSpacing(12);
+
+    auto* icon = new QLabel(entry.is_dir ? QStringLiteral("📁")
+                                         : QStringLiteral("📄"), frame);
+    icon->setObjectName(QStringLiteral("centerTitleLabel"));
+    icon->setFixedWidth(28);
+    layout->addWidget(icon, 0, Qt::AlignTop);
+
+    auto* text_layout = new QVBoxLayout();
+    text_layout->setContentsMargins(0, 0, 0, 0);
+    text_layout->setSpacing(4);
+
+    auto* name_label = new QLabel(entry.name, frame);
+    name_label->setObjectName(QStringLiteral("fileNameLabel"));
+    text_layout->addWidget(name_label);
+
+    const QString meta = entry.is_dir
+        ? QStringLiteral("文件夹 · %1").arg(entry.modified_at)
+        : QStringLiteral("%1 · %2").arg(formatFileSize(entry.size), entry.modified_at);
+    auto* meta_label = new QLabel(meta, frame);
+    meta_label->setObjectName(QStringLiteral("fileMetaLabel"));
+    text_layout->addWidget(meta_label);
+
+    auto* path_label = new QLabel(entry.path, frame);
+    path_label->setObjectName(QStringLiteral("filePathHintLabel"));
+    text_layout->addWidget(path_label);
+    layout->addLayout(text_layout, 1);
+
+    return frame;
+}
+
 } // namespace
 
 MainWindow::MainWindow(const QString& username,
                        cloudvault::FriendService& friend_service,
+                       cloudvault::FileService& file_service,
                        QWidget* parent)
     : QMainWindow(parent),
       current_username_(username),
-      friend_service_(friend_service) {
+      friend_service_(friend_service),
+      file_service_(file_service) {
     setupUi();
     connectSignals();
     friend_service_.flushFriends();
+    file_service_.listFiles(current_file_path_);
     switchMainTab(0);
 }
 
@@ -606,7 +701,7 @@ void MainWindow::setupUi() {
         header_layout->setSpacing(2);
         auto* title = new QLabel(QStringLiteral("文件"), header);
         title->setObjectName(QStringLiteral("centerTitleLabel"));
-        file_path_label_ = new QLabel(QStringLiteral("📁 /未选择联系人/"), header);
+        file_path_label_ = new QLabel(QStringLiteral("📁 /"), header);
         file_path_label_->setObjectName(QStringLiteral("secondaryLabel"));
         header_layout->addWidget(title);
         header_layout->addWidget(file_path_label_);
@@ -617,69 +712,51 @@ void MainWindow::setupUi() {
         auto* toolbar_layout = new QHBoxLayout(toolbar);
         toolbar_layout->setContentsMargins(10, 8, 10, 8);
         toolbar_layout->setSpacing(8);
-        auto* search = new QLineEdit(toolbar);
-        search->setPlaceholderText(QStringLiteral("搜索文件…"));
-        toolbar_layout->addWidget(search, 1);
-        auto* back_btn = new QPushButton(QStringLiteral("↑ 返回"), toolbar);
-        back_btn->setObjectName(QStringLiteral("lightButton"));
-        auto* create_btn = new QPushButton(QStringLiteral("+ 新建"), toolbar);
-        create_btn->setObjectName(QStringLiteral("primaryButton"));
-        toolbar_layout->addWidget(back_btn);
-        toolbar_layout->addWidget(create_btn);
+        file_search_edit_ = new QLineEdit(toolbar);
+        file_search_edit_->setPlaceholderText(QStringLiteral("搜索文件，回车执行…"));
+        toolbar_layout->addWidget(file_search_edit_, 1);
+        file_back_btn_ = new QPushButton(QStringLiteral("↑ 返回"), toolbar);
+        file_back_btn_->setObjectName(QStringLiteral("lightButton"));
+        file_refresh_btn_ = new QPushButton(QStringLiteral("⟳ 刷新"), toolbar);
+        file_refresh_btn_->setObjectName(QStringLiteral("lightButton"));
+        file_create_btn_ = new QPushButton(QStringLiteral("+ 新建"), toolbar);
+        file_create_btn_->setObjectName(QStringLiteral("primaryButton"));
+        toolbar_layout->addWidget(file_back_btn_);
+        toolbar_layout->addWidget(file_refresh_btn_);
+        toolbar_layout->addWidget(file_create_btn_);
         page_layout->addWidget(toolbar);
 
-        auto* files = new QWidget(page);
-        auto* files_layout = new QVBoxLayout(files);
-        files_layout->setContentsMargins(4, 4, 4, 4);
-        files_layout->setSpacing(8);
-        files_layout->addWidget(createDetailCard(QStringLiteral("📁 documents"),
-                                                 QStringLiteral("最近修改：今天"),
-                                                 QStringLiteral("目录"), files));
-        files_layout->addWidget(createDetailCard(QStringLiteral("📁 images"),
-                                                 QStringLiteral("最近修改：昨天"),
-                                                 QStringLiteral("目录"), files));
-        files_layout->addWidget(createDetailCard(QStringLiteral("📄 report.pdf"),
-                                                 QStringLiteral("2.4MB"),
-                                                 QStringLiteral("今天上传"), files));
-        files_layout->addWidget(createDetailCard(QStringLiteral("📄 photo.jpg"),
-                                                 QStringLiteral("1.1MB"),
-                                                 QStringLiteral("昨天上传"), files));
-        files_layout->addWidget(createDetailCard(QStringLiteral("📄 data.xlsx"),
-                                                 QStringLiteral("856KB"),
-                                                 QStringLiteral("周一上传"), files));
+        file_list_ = new QListWidget(page);
+        file_list_->setObjectName(QStringLiteral("fileList"));
+        file_list_->setSpacing(0);
+        page_layout->addWidget(file_list_, 1);
 
-        auto* selection_card = new QFrame(files);
+        auto* selection_card = new QFrame(page);
         selection_card->setObjectName(QStringLiteral("detailCard"));
         auto* selection_layout = new QVBoxLayout(selection_card);
         selection_layout->setContentsMargins(12, 12, 12, 12);
         selection_layout->setSpacing(8);
-        detail_file_target_label_ = new QLabel(QStringLiteral("选中：report.pdf"), selection_card);
+        detail_file_target_label_ = new QLabel(QStringLiteral("选中：未选择文件"), selection_card);
         detail_file_target_label_->setObjectName(QStringLiteral("sectionTitleLabel"));
         selection_layout->addWidget(detail_file_target_label_);
+        detail_file_meta_label_ = new QLabel(QStringLiteral("支持：双击进入目录 / 重命名 / 移动 / 删除"), selection_card);
+        detail_file_meta_label_->setObjectName(QStringLiteral("secondaryLabel"));
+        detail_file_meta_label_->setWordWrap(true);
+        selection_layout->addWidget(detail_file_meta_label_);
 
         auto* file_action_row = new QHBoxLayout();
         file_action_row->setSpacing(8);
-        auto* download_btn = new QPushButton(QStringLiteral("⬇ 下载"), selection_card);
-        download_btn->setObjectName(QStringLiteral("lightButton"));
-        auto* rename_btn = new QPushButton(QStringLiteral("✏ 重命名"), selection_card);
-        rename_btn->setObjectName(QStringLiteral("lightButton"));
-        auto* delete_btn = new QPushButton(QStringLiteral("🗑 删除"), selection_card);
-        delete_btn->setObjectName(QStringLiteral("dangerButton"));
-        file_share_btn_ = new QPushButton(QStringLiteral("↗ 分享"), selection_card);
-        file_share_btn_->setObjectName(QStringLiteral("primaryButton"));
-        file_action_row->addWidget(download_btn);
-        file_action_row->addWidget(rename_btn);
-        file_action_row->addWidget(delete_btn);
-        file_action_row->addWidget(file_share_btn_);
+        file_rename_btn_ = new QPushButton(QStringLiteral("✏ 重命名"), selection_card);
+        file_rename_btn_->setObjectName(QStringLiteral("lightButton"));
+        file_move_btn_ = new QPushButton(QStringLiteral("✂ 移动"), selection_card);
+        file_move_btn_->setObjectName(QStringLiteral("lightButton"));
+        file_delete_btn_ = new QPushButton(QStringLiteral("🗑 删除"), selection_card);
+        file_delete_btn_->setObjectName(QStringLiteral("dangerButton"));
+        file_action_row->addWidget(file_rename_btn_);
+        file_action_row->addWidget(file_move_btn_);
+        file_action_row->addWidget(file_delete_btn_);
         selection_layout->addLayout(file_action_row);
-
-        auto* progress_title = new QLabel(QStringLiteral("上传进度"), selection_card);
-        progress_title->setObjectName(QStringLiteral("sectionTitleLabel"));
-        selection_layout->addWidget(progress_title);
-        selection_layout->addWidget(createMetaLabel(QStringLiteral("████████░░ 80%  3.2/4MB")));
-        files_layout->addWidget(selection_card);
-        files_layout->addStretch();
-        page_layout->addWidget(files, 1);
+        page_layout->addWidget(selection_card);
 
         center_stack_->addWidget(page);
     }
@@ -818,7 +895,32 @@ void MainWindow::connectSignals() {
             this, &MainWindow::openOnlineUserDialog);
 
     connect(logout_btn_, &QPushButton::clicked, this, &MainWindow::logoutRequested);
-    connect(file_share_btn_, &QPushButton::clicked, this, &MainWindow::openShareFileDialog);
+    connect(file_back_btn_, &QPushButton::clicked, this, &MainWindow::openCurrentParentDirectory);
+    connect(file_refresh_btn_, &QPushButton::clicked,
+            this, [this] {
+                if (file_search_mode_ && !current_file_query_.isEmpty()) {
+                    file_service_.search(current_file_query_);
+                } else {
+                    file_service_.listFiles(current_file_path_);
+                }
+            });
+    connect(file_create_btn_, &QPushButton::clicked, this, &MainWindow::createDirectory);
+    connect(file_search_edit_, &QLineEdit::returnPressed, this, &MainWindow::runFileSearch);
+    connect(file_search_edit_, &QLineEdit::textChanged, this, &MainWindow::clearFileSearchIfNeeded);
+    connect(file_list_, &QListWidget::itemSelectionChanged, this, &MainWindow::applySelectedFile);
+    connect(file_list_, &QListWidget::itemDoubleClicked,
+            this, [this](QListWidgetItem* item) {
+                if (!item || !item->data(Qt::UserRole + 1).toBool()) {
+                    return;
+                }
+                file_search_mode_ = false;
+                current_file_query_.clear();
+                file_search_edit_->clear();
+                navigateToFilePath(item->data(Qt::UserRole).toString());
+            });
+    connect(file_rename_btn_, &QPushButton::clicked, this, &MainWindow::renameSelectedFile);
+    connect(file_move_btn_, &QPushButton::clicked, this, &MainWindow::moveSelectedFile);
+    connect(file_delete_btn_, &QPushButton::clicked, this, &MainWindow::deleteSelectedFile);
 
     connect(&friend_service_, &cloudvault::FriendService::friendsRefreshed,
             this, &MainWindow::refreshFriendList);
@@ -844,6 +946,34 @@ void MainWindow::connectSignals() {
                 if (reply == QMessageBox::Yes) {
                     friend_service_.agreeFriend(from);
                 }
+            });
+    connect(&file_service_, &cloudvault::FileService::filesListed,
+            this, &MainWindow::refreshFileList);
+    connect(&file_service_, &cloudvault::FileService::fileListFailed,
+            this, [this](const QString& reason) {
+                QMessageBox::warning(this, QStringLiteral("文件列表"), reason);
+            });
+    connect(&file_service_, &cloudvault::FileService::searchCompleted,
+            this, [this](const QString& keyword, const cloudvault::FileEntries& entries) {
+                file_search_mode_ = true;
+                current_file_query_ = keyword;
+                refreshFileList(QStringLiteral("搜索：%1").arg(keyword), entries);
+            });
+    connect(&file_service_, &cloudvault::FileService::searchFailed,
+            this, [this](const QString& reason) {
+                QMessageBox::warning(this, QStringLiteral("文件搜索"), reason);
+            });
+    connect(&file_service_, &cloudvault::FileService::fileOperationSucceeded,
+            this, [this](const QString& message) {
+                QMessageBox::information(this, QStringLiteral("文件操作"), message);
+                file_search_mode_ = false;
+                current_file_query_.clear();
+                file_search_edit_->clear();
+                file_service_.listFiles(current_file_path_);
+            });
+    connect(&file_service_, &cloudvault::FileService::fileOperationFailed,
+            this, [this](const QString& message) {
+                QMessageBox::warning(this, QStringLiteral("文件操作"), message);
             });
 }
 
@@ -894,7 +1024,6 @@ void MainWindow::filterFriendList(const QString& keyword) {
         chat_status_label_->setText(QStringLiteral("在线"));
         detail_contact_name_label_->setText(QStringLiteral("未选择联系人"));
         detail_contact_status_label_->setText(QStringLiteral("请选择左侧联系人"));
-        file_path_label_->setText(QStringLiteral("📁 /未选择联系人/"));
     }
 
     updateContactSelectionState();
@@ -932,7 +1061,189 @@ void MainWindow::applySelectedFriend() {
     detail_contact_status_label_->setText(
         online ? QStringLiteral("在线 · 可直接聊天")
                : QStringLiteral("离线 · 静默等待状态更新"));
-    file_path_label_->setText(QStringLiteral("📁 /%1/").arg(username));
+}
+
+void MainWindow::refreshFileList(const QString& path,
+                                 const cloudvault::FileEntries& entries) {
+    if (!file_search_mode_) {
+        current_file_path_ = path.isEmpty() ? QStringLiteral("/") : path;
+    }
+    current_file_entries_ = entries;
+    file_list_->clear();
+
+    for (const auto& entry : entries) {
+        auto* item = new QListWidgetItem(file_list_);
+        item->setSizeHint(QSize(0, 76));
+        item->setData(Qt::UserRole, entry.path);
+        item->setData(Qt::UserRole + 1, entry.is_dir);
+        item->setData(Qt::UserRole + 2, entry.name);
+        auto* widget = createFileItemWidget(entry, false, file_list_);
+        file_list_->setItemWidget(item, widget);
+    }
+
+    if (file_search_mode_) {
+        file_path_label_->setText(QStringLiteral("🔎 搜索结果：%1").arg(current_file_query_));
+    } else {
+        file_path_label_->setText(QStringLiteral("📁 %1").arg(current_file_path_));
+    }
+    file_back_btn_->setEnabled(file_search_mode_ || current_file_path_ != QStringLiteral("/"));
+
+    if (file_list_->count() > 0) {
+        file_list_->setCurrentRow(0);
+    } else {
+        detail_file_target_label_->setText(QStringLiteral("选中：未选择文件"));
+        detail_file_meta_label_->setText(file_search_mode_
+            ? QStringLiteral("没有匹配结果，修改关键词后回车重试。")
+            : QStringLiteral("当前目录为空，可以新建文件夹开始管理。"));
+    }
+
+    updateFileSelectionState();
+}
+
+void MainWindow::updateFileSelectionState() {
+    for (int i = 0; i < file_list_->count(); ++i) {
+        auto* item = file_list_->item(i);
+        auto* widget = file_list_->itemWidget(item);
+        if (!widget) {
+            continue;
+        }
+        widget->setProperty("selected", item->isSelected());
+        repolish(widget);
+    }
+
+    const bool has_selection = file_list_->currentItem() != nullptr;
+    file_rename_btn_->setEnabled(has_selection);
+    file_move_btn_->setEnabled(has_selection);
+    file_delete_btn_->setEnabled(has_selection);
+}
+
+void MainWindow::applySelectedFile() {
+    updateFileSelectionState();
+
+    const QString path = selectedFilePath();
+    if (path.isEmpty()) {
+        detail_file_target_label_->setText(QStringLiteral("选中：未选择文件"));
+        detail_file_meta_label_->setText(QStringLiteral("请选择一个文件或文件夹。"));
+        return;
+    }
+
+    const bool is_dir = selectedFileIsDir();
+    const QString name = file_list_->currentItem()->data(Qt::UserRole + 2).toString();
+    detail_file_target_label_->setText(QStringLiteral("选中：%1").arg(name));
+    detail_file_meta_label_->setText(
+        is_dir
+            ? QStringLiteral("目录 · 双击可进入；支持重命名、移动、删除。")
+            : QStringLiteral("文件 · 支持重命名、移动、删除。"));
+}
+
+void MainWindow::navigateToFilePath(const QString& path) {
+    file_search_mode_ = false;
+    current_file_query_.clear();
+    file_service_.listFiles(path.isEmpty() ? QStringLiteral("/") : path);
+}
+
+void MainWindow::openCurrentParentDirectory() {
+    if (file_search_mode_) {
+        file_search_mode_ = false;
+        current_file_query_.clear();
+        file_search_edit_->clear();
+        file_service_.listFiles(current_file_path_);
+        return;
+    }
+
+    if (current_file_path_ == QStringLiteral("/") || current_file_path_.isEmpty()) {
+        return;
+    }
+
+    const QString normalized = current_file_path_.endsWith('/')
+        ? current_file_path_.left(current_file_path_.size() - 1)
+        : current_file_path_;
+    const int index = normalized.lastIndexOf('/');
+    const QString parent = (index <= 0) ? QStringLiteral("/")
+                                        : normalized.left(index);
+    navigateToFilePath(parent);
+}
+
+void MainWindow::createDirectory() {
+    const QString name = QInputDialog::getText(
+        this, QStringLiteral("新建文件夹"),
+        QStringLiteral("请输入新文件夹名称：")).trimmed();
+    if (name.isEmpty()) {
+        return;
+    }
+    file_service_.createDirectory(current_file_path_, name);
+}
+
+void MainWindow::renameSelectedFile() {
+    const QString path = selectedFilePath();
+    if (path.isEmpty()) {
+        return;
+    }
+
+    const QString current_name = file_list_->currentItem()->data(Qt::UserRole + 2).toString();
+    const QString new_name = QInputDialog::getText(
+        this, QStringLiteral("重命名"),
+        QStringLiteral("请输入新名称："),
+        QLineEdit::Normal,
+        current_name).trimmed();
+    if (new_name.isEmpty() || new_name == current_name) {
+        return;
+    }
+    file_service_.renamePath(path, new_name);
+}
+
+void MainWindow::moveSelectedFile() {
+    const QString path = selectedFilePath();
+    if (path.isEmpty()) {
+        return;
+    }
+
+    const QString destination = QInputDialog::getText(
+        this, QStringLiteral("移动"),
+        QStringLiteral("请输入目标目录路径（例如 /archive）："),
+        QLineEdit::Normal,
+        current_file_path_).trimmed();
+    if (destination.isEmpty()) {
+        return;
+    }
+    file_service_.movePath(path, destination);
+}
+
+void MainWindow::deleteSelectedFile() {
+    const QString path = selectedFilePath();
+    if (path.isEmpty()) {
+        return;
+    }
+
+    const QString current_name = file_list_->currentItem()->data(Qt::UserRole + 2).toString();
+    const auto reply = QMessageBox::question(
+        this, QStringLiteral("删除"),
+        QStringLiteral("确认删除“%1”吗？此操作不可恢复。").arg(current_name),
+        QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes) {
+        return;
+    }
+    file_service_.deletePath(path);
+}
+
+void MainWindow::runFileSearch() {
+    const QString keyword = file_search_edit_->text().trimmed();
+    if (keyword.isEmpty()) {
+        file_search_mode_ = false;
+        current_file_query_.clear();
+        file_service_.listFiles(current_file_path_);
+        return;
+    }
+    file_service_.search(keyword);
+}
+
+void MainWindow::clearFileSearchIfNeeded(const QString& text) {
+    if (!text.trimmed().isEmpty() || !file_search_mode_) {
+        return;
+    }
+    file_search_mode_ = false;
+    current_file_query_.clear();
+    file_service_.listFiles(current_file_path_);
 }
 
 void MainWindow::switchMainTab(int index) {
@@ -999,4 +1310,22 @@ bool MainWindow::selectedFriendOnline() const {
         return item->data(Qt::UserRole + 1).toBool();
     }
     return false;
+}
+
+QString MainWindow::selectedFilePath() const {
+    if (auto* item = file_list_->currentItem()) {
+        return item->data(Qt::UserRole).toString();
+    }
+    return {};
+}
+
+bool MainWindow::selectedFileIsDir() const {
+    if (auto* item = file_list_->currentItem()) {
+        return item->data(Qt::UserRole + 1).toBool();
+    }
+    return false;
+}
+
+bool MainWindow::fileListShowingSearchResults() const {
+    return file_search_mode_;
 }
