@@ -51,7 +51,7 @@ services:
 
 1. 安装 MySQL，创建数据库和用户
 2. 编译服务端：`cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build`
-3. 复制配置文件：`cp config/server.json.example config/server.json`（填写真实配置）
-4. 运行：`./build/cloudvault_server`
+3. 复制配置文件：`cp server/config/server.example.json server/config/server.json`（填写真实配置）
+4. 运行：`./build/cloudvault_server /path/to/server/config/server.json`
 
 参考：[CI/CD 与 GitHub Actions 入门](knowledge/cicd-guide.md)

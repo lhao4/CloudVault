@@ -68,6 +68,7 @@ LoginWindow::LoginWindow(QWidget* parent)
     , ui_(std::make_unique<Ui::LoginWindow>())
     , auth_service_(tcp_client_, router_, this)
     , friend_service_(tcp_client_, router_, this)
+    , chat_service_(tcp_client_, router_, this)
 {
     ui_->setupUi(this);
 
@@ -322,7 +323,7 @@ void LoginWindow::connectSignals() {
 
                 main_window_.reset();
                 main_window_ = std::make_unique<MainWindow>(
-                    current_username_, friend_service_);
+                    current_username_, friend_service_, chat_service_);
                 connect(main_window_.get(), &MainWindow::windowClosed,
                         this, [this] {
                             tcp_client_.disconnectFromServer();

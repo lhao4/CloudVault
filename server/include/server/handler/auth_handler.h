@@ -11,6 +11,7 @@
 #pragma once
 
 #include "server/db/database.h"
+#include "server/db/chat_repository.h"
 #include "server/db/user_repository.h"
 #include "server/session_manager.h"
 #include "common/protocol.h"
@@ -39,7 +40,12 @@ public:
                       const std::vector<uint8_t>&     body);
 
 private:
+    void deliverOfflineMessages(std::shared_ptr<TcpConnection> conn,
+                                int user_id,
+                                const std::string& username);
+
     UserRepository users_;
+    ChatRepository messages_;
     SessionManager& sessions_;
 };
 

@@ -413,7 +413,7 @@ mysql -u root -P 3307 -h 127.0.0.1 -p < server/sql/init.sql
 export CLOUDVAULT_DB_PASSWORD=cloudvault_dev_123
 ```
 
-如果只是本地调试，也可以直接在本地 `server.json` 中填写 `password` 字段，但不要提交进仓库。
+如果只是本地调试，也可以直接在本地 `server/config/server.json` 中填写 `password` 字段，但不要提交进仓库。
 
 ### 8.9.3 准备客户端配置
 
@@ -431,7 +431,7 @@ export CLOUDVAULT_DB_PASSWORD=cloudvault_dev_123
 ### 8.9.4 启动服务端
 
 ```bash
-./cloudvault_server /path/to/server.json
+./cloudvault_server /path/to/server/config/server.json
 ```
 
 正常日志应包含：
