@@ -42,6 +42,10 @@ public:
     // 析构时自动将 MYSQL* 归还连接池，无需手动 release()
     class Connection {
     public:
+        Connection(const Connection&) = delete;
+        Connection& operator=(const Connection&) = delete;
+        Connection(Connection&& other) noexcept;
+        Connection& operator=(Connection&& other) noexcept;
         ~Connection();
 
         MYSQL* get() const { return conn_; }

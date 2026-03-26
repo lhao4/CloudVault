@@ -30,6 +30,8 @@ public:
         std::shared_ptr<TcpConnection>,
         const PDUHeader&,
         std::vector<uint8_t>)>;
+    using SendInterceptor =
+        std::function<void(const std::vector<uint8_t>&)>;
     using CloseCallback =
         std::function<void(std::shared_ptr<TcpConnection>)>;
 
@@ -44,6 +46,7 @@ public:
     void close();
 
     void setMessageCallback(MessageCallback cb) { msg_cb_ = std::move(cb); }
+    void setSendInterceptor(SendInterceptor cb) { send_interceptor_ = std::move(cb); }
     void setCloseCallback  (CloseCallback   cb) { close_cbs_.push_back(std::move(cb)); }
 
     // 由 EventLoop 回调，在 IO 线程执行
@@ -65,6 +68,7 @@ private:
     std::vector<uint8_t> send_buf_;
 
     MessageCallback msg_cb_;
+    SendInterceptor send_interceptor_;
     std::vector<CloseCallback> close_cbs_;
 };
 

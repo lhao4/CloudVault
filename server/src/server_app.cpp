@@ -143,6 +143,7 @@ bool ServerApp::init(const std::string& config_path) {
 
     file_storage_ = std::make_unique<cloudvault::FileStorage>(storage_root);
     auth_handler_ = std::make_unique<cloudvault::AuthHandler>(*db_, sessions_);
+    chat_handler_ = std::make_unique<cloudvault::ChatHandler>(*db_, sessions_);
     friend_handler_ = std::make_unique<cloudvault::FriendHandler>(*db_, sessions_);
     file_handler_ = std::make_unique<cloudvault::FileHandler>(sessions_, *file_storage_);
     share_handler_ = std::make_unique<cloudvault::ShareHandler>(*db_, sessions_, *file_storage_);
@@ -168,6 +169,9 @@ bool ServerApp::init(const std::string& config_path) {
             spdlog::info("Client connected: {}", conn->peerAddr());
 
             conn->setCloseCallback([this](std::shared_ptr<cloudvault::TcpConnection> c) {
+                if (file_handler_) {
+                    file_handler_->handleConnectionClosed(c);
+                }
                 if (share_handler_) {
                     share_handler_->handleConnectionClosed(c);
                 }
@@ -232,6 +236,23 @@ void ServerApp::registerHandlers() {
                const cloudvault::PDUHeader& hdr,
                const std::vector<uint8_t>& body) {
             auth_handler_->handleLogout(conn, hdr, body);
+        });
+
+    // 聊天（第十章）
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::CHAT,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            chat_handler_->handleChat(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::GET_HISTORY,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            chat_handler_->handleGetHistory(conn, hdr, body);
         });
 
     // 好友（第九章）
@@ -324,6 +345,39 @@ void ServerApp::registerHandlers() {
             file_handler_->handleSearch(conn, hdr, body);
         });
 
+    // 文件传输（第十二章）
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::UPLOAD_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleUploadRequest(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::UPLOAD_DATA,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleUploadData(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::DOWNLOAD_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleDownloadRequest(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::DOWNLOAD_DATA,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleDownloadData(conn, hdr, body);
+        });
+
     // 文件分享（第十三章）
     dispatcher_.registerHandler(
         cloudvault::MessageType::SHARE_REQUEST,
@@ -384,6 +438,9 @@ void ServerApp::shutdown() {
     event_loop_.reset();
 
     auth_handler_.reset();
+    chat_handler_.reset();
+    friend_handler_.reset();
+    share_handler_.reset();
     file_handler_.reset();
     file_storage_.reset();
     db_.reset();

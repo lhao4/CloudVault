@@ -21,6 +21,7 @@
 #include "server/db/database.h"
 #include "server/file_storage.h"
 #include "server/handler/auth_handler.h"
+#include "server/handler/chat_handler.h"
 #include "server/handler/friend_handler.h"
 #include "server/handler/file_handler.h"
 #include "server/handler/share_handler.h"
@@ -55,6 +56,7 @@ private:
     std::unique_ptr<cloudvault::FileStorage>   file_storage_;
     cloudvault::SessionManager                 sessions_;
     std::unique_ptr<cloudvault::AuthHandler>   auth_handler_;
+    std::unique_ptr<cloudvault::ChatHandler>   chat_handler_;
     std::unique_ptr<cloudvault::FriendHandler> friend_handler_;
     std::unique_ptr<cloudvault::FileHandler>   file_handler_;
     std::unique_ptr<cloudvault::ShareHandler>  share_handler_;

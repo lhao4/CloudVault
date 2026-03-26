@@ -216,9 +216,15 @@ void AuthHandler::handleLogout(std::shared_ptr<TcpConnection> conn,
                                 const PDUHeader& /*hdr*/,
                                 const std::vector<uint8_t>& /*body*/)
 {
-    // 根据连接找到对应会话并移除
-    sessions_.removeByConnection(conn);
-    spdlog::info("LOGOUT from {}", conn->peerAddr());
+    const auto current = sessions_.findByConnection(conn);
+    if (!current) {
+        spdlog::info("LOGOUT ignored for unauthenticated peer {}", conn->peerAddr());
+        return;
+    }
+
+    sessions_.removeSession(current->user_id);
+    users_.setOnline(current->user_id, false);
+    spdlog::info("LOGOUT success: {} (uid={})", current->username, current->user_id);
 }
 
 void AuthHandler::deliverOfflineMessages(std::shared_ptr<TcpConnection> conn,

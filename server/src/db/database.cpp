@@ -121,6 +121,28 @@ void Database::ping() {
 Database::Connection::Connection(MYSQL* conn, Database* pool)
     : conn_(conn), pool_(pool) {}
 
+Database::Connection::Connection(Connection&& other) noexcept
+    : conn_(other.conn_), pool_(other.pool_) {
+    other.conn_ = nullptr;
+    other.pool_ = nullptr;
+}
+
+Database::Connection& Database::Connection::operator=(Connection&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    if (conn_ && pool_) {
+        pool_->returnConnection(conn_);
+    }
+
+    conn_ = other.conn_;
+    pool_ = other.pool_;
+    other.conn_ = nullptr;
+    other.pool_ = nullptr;
+    return *this;
+}
+
 Database::Connection::~Connection() {
     if (conn_ && pool_) {
         pool_->returnConnection(conn_);
