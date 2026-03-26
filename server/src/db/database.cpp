@@ -47,10 +47,6 @@ MYSQL* Database::createConnection() {
     // 设置字符集为 utf8mb4（支持 emoji）
     mysql_options(conn, MYSQL_SET_CHARSET_NAME, "utf8mb4");
 
-    // 启用自动重连（短暂断线后自动恢复）
-    bool reconnect = true;
-    mysql_options(conn, MYSQL_OPT_RECONNECT, &reconnect);
-
     if (!mysql_real_connect(conn,
                             cfg_.host.c_str(),
                             cfg_.user.c_str(),

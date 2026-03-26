@@ -31,6 +31,17 @@ static void onSignal(int sig) {
     g_shutdown.store(true);
 }
 
+static std::string executablePath() {
+#ifdef __linux__
+    std::error_code ec;
+    const auto path = std::filesystem::read_symlink("/proc/self/exe", ec);
+    if (!ec) {
+        return path.string();
+    }
+#endif
+    return {};
+}
+
 // =============================================================
 // 构造 / 析构
 // =============================================================
@@ -103,6 +114,11 @@ bool ServerApp::init(const std::string& config_path) {
     spdlog::info("文件存储  : {}", storage_root);
     spdlog::info("数据库    : {}:{}/{}", db_host, db_port, db_name);
     spdlog::info("日志级别  : {}", log_level);
+    const std::string exe_path = executablePath();
+    if (!exe_path.empty()) {
+        spdlog::info("可执行文件: {}", exe_path);
+    }
+    spdlog::info("构建时间  : {} {}", __DATE__, __TIME__);
 
     // ── 5. 初始化数据库连接池（第八章）──────────────────────
     const std::string db_user = cfg.value(jp("/database/user"), std::string("root"));
