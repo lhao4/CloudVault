@@ -179,6 +179,53 @@ std::vector<FileStorage::Entry> FileStorage::search(const std::string& username,
     return results;
 }
 
+FileStorage::TransferEntry FileStorage::inspectPath(const std::string& username,
+                                                    const std::string& target_path) const {
+    const auto root = std::filesystem::weakly_canonical(userRoot(username));
+    const auto absolute = resolvePath(username, target_path);
+
+    TransferEntry entry;
+    entry.name = absolute.filename().string();
+    entry.path = toRelativePath(root, absolute);
+    entry.absolute_path = absolute;
+    entry.is_dir = std::filesystem::is_directory(absolute);
+    if (!entry.is_dir) {
+        std::error_code ec;
+        entry.size = std::filesystem::file_size(absolute, ec);
+        if (ec) {
+            entry.size = 0;
+        }
+    }
+    return entry;
+}
+
+FileStorage::TransferEntry FileStorage::prepareUploadTarget(const std::string& username,
+                                                            const std::string& dir_path,
+                                                            const std::string& filename) const {
+    validateName(filename);
+
+    const auto parent = resolvePath(username, dir_path);
+    if (!std::filesystem::exists(parent) || !std::filesystem::is_directory(parent)) {
+        throw std::runtime_error("目标目录不存在");
+    }
+
+    const auto root = std::filesystem::weakly_canonical(userRoot(username));
+    const auto target = (parent / filename).lexically_normal();
+    ensureInsideRoot(root, target);
+
+    if (std::filesystem::exists(target)) {
+        throw std::runtime_error("目标已存在");
+    }
+
+    TransferEntry entry;
+    entry.name = filename;
+    entry.path = toRelativePath(root, target);
+    entry.absolute_path = target;
+    entry.is_dir = false;
+    entry.size = 0;
+    return entry;
+}
+
 FileStorage::FileInfo FileStorage::inspectPath(const std::string& username,
                                                const std::string& target_path) const {
     const auto root = std::filesystem::weakly_canonical(userRoot(username));
