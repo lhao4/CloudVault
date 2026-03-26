@@ -73,6 +73,12 @@ file(GLOB_RECURSE SERVER_SOURCES
 # ── 定义可执行文件 target ─────────────────────────────────
 add_executable(cloudvault_server ${SERVER_SOURCES})
 
+# Ubuntu/Debian 的系统包导出的 imported targets（如 spdlog/fmt/json）
+# 会把 /usr/include 作为 SYSTEM include 传递给消费者，GCC 13 下这会让
+# <cstdlib> 内部的 #include_next <stdlib.h> 失效。这里显式关闭 imported
+# target 的 SYSTEM include 语义，保留头文件可见性，但避免生成 -isystem /usr/include。
+set_property(TARGET cloudvault_server PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
+
 # ── 头文件路径 ────────────────────────────────────────────
 # PRIVATE：只有 cloudvault_server 自己编译时才需要这些路径，
 #   不会传递给其他链接了 server 的 target（server 是最终产物，不会被别人链接）。

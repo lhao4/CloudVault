@@ -42,6 +42,11 @@ add_library(cloudvault_common STATIC
     src/crypto_utils.cpp
 )
 
+# Ubuntu/Debian 的 imported system targets 会把 /usr/include 作为 SYSTEM
+# include 传给消费者，GCC 13 下这会触发 <cstdlib> -> #include_next 失败。
+# 关闭 imported target 的 SYSTEM include 语义，避免生成 -isystem /usr/include。
+set_property(TARGET cloudvault_common PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
+
 # ── 头文件搜索路径 ────────────────────────────────────────
 # target_include_directories()：告诉编译器去哪里找 #include 的头文件。
 #
