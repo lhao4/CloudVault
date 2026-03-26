@@ -83,13 +83,25 @@ void sendLoginResponse(std::shared_ptr<TcpConnection> conn,
     conn->send(std::move(pdu));
 }
 
+std::vector<uint8_t> buildChatPush(const std::string& from,
+                                   const std::string& to,
+                                   const std::string& content,
+                                   const std::string& created_at) {
+    return PDUBuilder(MessageType::CHAT)
+        .writeString(from)
+        .writeString(to)
+        .writeString(content)
+        .writeString(created_at)
+        .build();
+}
+
 } // namespace
 
 // =============================================================
 // 构造函数
 // =============================================================
 AuthHandler::AuthHandler(Database& db, SessionManager& sessions)
-    : users_(db), sessions_(sessions) {}
+    : users_(db), messages_(db), sessions_(sessions) {}
 
 // =============================================================
 // handleRegister()
@@ -194,6 +206,7 @@ void AuthHandler::handleLogin(std::shared_ptr<TcpConnection> conn,
 
     spdlog::info("LOGIN success: username={} uid={}", username, uid);
     sendLoginResponse(conn, 0, static_cast<uint32_t>(uid), "登录成功");
+    deliverOfflineMessages(conn, uid, username);
 }
 
 // =============================================================
@@ -206,6 +219,30 @@ void AuthHandler::handleLogout(std::shared_ptr<TcpConnection> conn,
     // 根据连接找到对应会话并移除
     sessions_.removeByConnection(conn);
     spdlog::info("LOGOUT from {}", conn->peerAddr());
+}
+
+void AuthHandler::deliverOfflineMessages(std::shared_ptr<TcpConnection> conn,
+                                         int user_id,
+                                         const std::string& username) {
+    const auto offline_messages = messages_.fetchUndeliveredMessages(user_id);
+    if (offline_messages.empty()) {
+        return;
+    }
+
+    for (const auto& item : offline_messages) {
+        conn->send(buildChatPush(item.sender_username,
+                                 username,
+                                 item.content,
+                                 item.created_at));
+    }
+
+    if (!messages_.markMessagesDelivered(user_id)) {
+        spdlog::warn("Failed to mark offline chat messages delivered for {}", username);
+        return;
+    }
+
+    spdlog::info("Delivered {} offline chat messages to {}",
+                 offline_messages.size(), username);
 }
 
 } // namespace cloudvault

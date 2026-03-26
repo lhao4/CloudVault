@@ -6,7 +6,9 @@
 #pragma once
 
 #include "network/friend_service.h"
+#include "network/chat_service.h"
 
+#include <QHash>
 #include <QList>
 #include <QMainWindow>
 #include <QPair>
@@ -21,6 +23,8 @@ class QFrame;
 class QTextEdit;
 class QVBoxLayout;
 class QStackedWidget;
+class QScrollArea;
+class QWidget;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -28,6 +32,7 @@ class MainWindow : public QMainWindow {
 public:
     MainWindow(const QString& username,
                cloudvault::FriendService& friend_service,
+               cloudvault::ChatService& chat_service,
                QWidget* parent = nullptr);
     ~MainWindow() override;
 
@@ -45,6 +50,11 @@ private:
     void filterFriendList(const QString& keyword);
     void updateContactSelectionState();
     void updateDeleteFriendAction();
+    void renderConversation(const QString& peer);
+    void appendConversationMessage(const cloudvault::ChatMessage& message);
+    void sendCurrentMessage();
+    void refreshCurrentConversation();
+    QString formatMessageTime(const QString& timestamp) const;
     void applySelectedFriend();
     void switchMainTab(int index);
     void confirmDeleteSelectedFriend();
@@ -53,9 +63,17 @@ private:
     QString selectedFriend() const;
     bool selectedFriendOnline() const;
 
+    struct ConversationState {
+        QList<cloudvault::ChatMessage> messages;
+        int unread_count = 0;
+        bool history_loaded = false;
+    };
+
     QString current_username_;
     cloudvault::FriendService& friend_service_;
+    cloudvault::ChatService& chat_service_;
     QList<QPair<QString, bool>> friends_;
+    QHash<QString, ConversationState> conversations_;
 
     QWidget* content_root_ = nullptr;
     QFrame* sidebar_panel_ = nullptr;
@@ -79,6 +97,10 @@ private:
     QLabel* profile_name_label_ = nullptr;
     QLabel* profile_id_label_ = nullptr;
     QTextEdit* message_input_ = nullptr;
+    QWidget* message_list_widget_ = nullptr;
+    QVBoxLayout* message_list_layout_ = nullptr;
+    QScrollArea* message_scroll_area_ = nullptr;
+    QPushButton* send_message_btn_ = nullptr;
     QPushButton* logout_btn_ = nullptr;
     QPushButton* file_share_btn_ = nullptr;
     QPushButton* delete_friend_btn_ = nullptr;

@@ -21,6 +21,7 @@
 #include "server/db/database.h"
 #include "server/handler/auth_handler.h"
 #include "server/handler/friend_handler.h"
+#include "server/handler/chat_handler.h"
 
 #include <memory>
 #include <string>
@@ -52,4 +53,5 @@ private:
     cloudvault::SessionManager                 sessions_;
     std::unique_ptr<cloudvault::AuthHandler>   auth_handler_;
     std::unique_ptr<cloudvault::FriendHandler> friend_handler_;
+    std::unique_ptr<cloudvault::ChatHandler>   chat_handler_;
 };

@@ -9,6 +9,7 @@
 #include "ui/share_file_dialog.h"
 
 #include <QCloseEvent>
+#include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -17,8 +18,12 @@
 #include <QListWidgetItem>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QStyle>
+#include <QTimer>
 #include <QTextEdit>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -361,10 +366,10 @@ QWidget* createMessageBubble(const QString& text,
     return wrap;
 }
 
-QWidget* createFileBubble(const QString& title,
-                          const QString& meta,
-                          const QString& time,
-                          QWidget* parent = nullptr) {
+[[maybe_unused]] QWidget* createFileBubble(const QString& title,
+                                           const QString& meta,
+                                           const QString& time,
+                                           QWidget* parent = nullptr) {
     auto* wrap = new QWidget(parent);
     auto* layout = new QVBoxLayout(wrap);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -453,10 +458,12 @@ void repolish(QWidget* widget) {
 
 MainWindow::MainWindow(const QString& username,
                        cloudvault::FriendService& friend_service,
+                       cloudvault::ChatService& chat_service,
                        QWidget* parent)
     : QMainWindow(parent),
       current_username_(username),
-      friend_service_(friend_service) {
+      friend_service_(friend_service),
+      chat_service_(chat_service) {
     setupUi();
     connectSignals();
     friend_service_.flushFriends();
@@ -552,32 +559,20 @@ void MainWindow::setupUi() {
         header_layout->addWidget(createIconButton(QStringLiteral("⋯"), header));
         page_layout->addWidget(header);
 
-        auto* message_area = new QWidget(page);
-        auto* msg_layout = new QVBoxLayout(message_area);
-        msg_layout->setContentsMargins(4, 2, 4, 2);
-        msg_layout->setSpacing(8);
-        auto* day_label = new QLabel(QStringLiteral("·今天·"), message_area);
-        day_label->setObjectName(QStringLiteral("dateDividerLabel"));
-        day_label->setAlignment(Qt::AlignCenter);
-        msg_layout->addWidget(day_label);
-        msg_layout->addWidget(createMessageBubble(QStringLiteral("嘿，项目文档准备好了吗？"),
-                                                  QStringLiteral("14:28"),
-                                                  false,
-                                                  message_area));
-        msg_layout->addWidget(createMessageBubble(QStringLiteral("快了，马上发给你。"),
-                                                  QStringLiteral("14:29"),
-                                                  true,
-                                                  message_area));
-        msg_layout->addWidget(createFileBubble(QStringLiteral("需求文档_v3.pdf"),
-                                               QStringLiteral("2.4 MB · PDF"),
-                                               QStringLiteral("14:30"),
-                                               message_area));
-        msg_layout->addWidget(createMessageBubble(QStringLiteral("收到，谢谢！我看一下。"),
-                                                  QStringLiteral("14:31"),
-                                                  false,
-                                                  message_area));
-        msg_layout->addStretch();
-        page_layout->addWidget(message_area, 1);
+        message_scroll_area_ = new QScrollArea(page);
+        message_scroll_area_->setFrameShape(QFrame::NoFrame);
+        message_scroll_area_->setWidgetResizable(true);
+        message_scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        message_scroll_area_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        message_scroll_area_->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; border: none; }"));
+
+        message_list_widget_ = new QWidget(message_scroll_area_);
+        message_list_layout_ = new QVBoxLayout(message_list_widget_);
+        message_list_layout_->setContentsMargins(4, 2, 4, 2);
+        message_list_layout_->setSpacing(8);
+        message_list_layout_->addStretch();
+        message_scroll_area_->setWidget(message_list_widget_);
+        page_layout->addWidget(message_scroll_area_, 1);
 
         auto* compose = new QFrame(page);
         compose->setObjectName(QStringLiteral("composeBar"));
@@ -590,10 +585,10 @@ void MainWindow::setupUi() {
         message_input_->setObjectName(QStringLiteral("messageInput"));
         message_input_->setPlaceholderText(QStringLiteral("输入消息…"));
         compose_layout->addWidget(message_input_, 1);
-        auto* send_btn = new QPushButton(QStringLiteral("➤"), compose);
-        send_btn->setObjectName(QStringLiteral("primaryButton"));
-        send_btn->setFixedWidth(42);
-        compose_layout->addWidget(send_btn);
+        send_message_btn_ = new QPushButton(QStringLiteral("➤"), compose);
+        send_message_btn_->setObjectName(QStringLiteral("primaryButton"));
+        send_message_btn_->setFixedWidth(42);
+        compose_layout->addWidget(send_message_btn_);
         page_layout->addWidget(compose);
 
         center_stack_->addWidget(page);
@@ -831,13 +826,19 @@ void MainWindow::connectSignals() {
     connect(file_share_btn_, &QPushButton::clicked, this, &MainWindow::openShareFileDialog);
     connect(delete_friend_btn_, &QPushButton::clicked,
             this, &MainWindow::confirmDeleteSelectedFriend);
+    connect(send_message_btn_, &QPushButton::clicked,
+            this, &MainWindow::sendCurrentMessage);
 
     connect(&friend_service_, &cloudvault::FriendService::friendsRefreshed,
             this, &MainWindow::refreshFriendList);
     connect(&friend_service_, &cloudvault::FriendService::friendAdded,
             this, [this](const QString&) { friend_service_.flushFriends(); });
     connect(&friend_service_, &cloudvault::FriendService::friendDeleted,
-            this, [this](const QString&) { friend_service_.flushFriends(); });
+            this, [this](const QString& username) {
+                conversations_.remove(username);
+                friend_service_.flushFriends();
+                refreshCurrentConversation();
+            });
     connect(&friend_service_, &cloudvault::FriendService::friendRequestSent,
             this, [this](const QString& target) {
                 QMessageBox::information(this, QStringLiteral("好友申请"),
@@ -861,16 +862,37 @@ void MainWindow::connectSignals() {
                     friend_service_.agreeFriend(from);
                 }
             });
+    connect(&chat_service_, &cloudvault::ChatService::messageReceived,
+            this, &MainWindow::appendConversationMessage);
+    connect(&chat_service_, &cloudvault::ChatService::historyLoaded,
+            this, [this](const QString& peer, const QList<cloudvault::ChatMessage>& messages) {
+                auto& state = conversations_[peer];
+                state.messages = messages;
+                state.history_loaded = true;
+                if (selectedFriend() == peer) {
+                    state.unread_count = 0;
+                    renderConversation(peer);
+                    filterFriendList(contact_search_edit_->text());
+                }
+            });
+    connect(&chat_service_, &cloudvault::ChatService::historyLoadFailed,
+            this, [this](const QString& peer, const QString& reason) {
+                if (!peer.isEmpty() && selectedFriend() == peer) {
+                    QMessageBox::warning(this, QStringLiteral("历史消息"), reason);
+                }
+            });
 }
 
 void MainWindow::refreshFriendList(const QList<QPair<QString, bool>>& friends) {
     friends_ = friends;
     filterFriendList(contact_search_edit_->text());
+    refreshCurrentConversation();
 }
 
 void MainWindow::filterFriendList(const QString& keyword) {
     const QString current = selectedFriend();
     const QString trimmed = keyword.trimmed();
+    QSignalBlocker blocker(contact_list_);
     contact_list_->clear();
 
     int index = 0;
@@ -879,10 +901,16 @@ void MainWindow::filterFriendList(const QString& keyword) {
             continue;
         }
 
-        const QString preview = online ? QStringLiteral("在线，可直接开始交流")
-                                       : QStringLiteral("离线，等待下次上线");
-        const QString time = online ? QStringLiteral("14:32") : QStringLiteral("周一");
-        const int unread = (index == 0 && online) ? 3 : 0;
+        const auto it = conversations_.find(username);
+        const bool has_messages = (it != conversations_.end() && !it->messages.isEmpty());
+        const QString preview = has_messages
+            ? it->messages.back().content
+            : (online ? QStringLiteral("在线，可直接开始交流")
+                      : QStringLiteral("离线，等待下次上线"));
+        const QString time = has_messages
+            ? formatMessageTime(it->messages.back().timestamp)
+            : (online ? QStringLiteral("在线") : QStringLiteral("离线"));
+        const int unread = (it != conversations_.end()) ? it->unread_count : 0;
 
         auto* item = new QListWidgetItem();
         item->setSizeHint(QSize(0, 64));
@@ -907,14 +935,16 @@ void MainWindow::filterFriendList(const QString& keyword) {
 
     if (contact_list_->count() == 0) {
         chat_title_label_->setText(QStringLiteral("● 联系人"));
-        chat_status_label_->setText(QStringLiteral("在线"));
+        chat_status_label_->setText(QStringLiteral("选择一个好友开始聊天"));
         detail_contact_name_label_->setText(QStringLiteral("未选择联系人"));
         detail_contact_status_label_->setText(QStringLiteral("请选择左侧联系人"));
         file_path_label_->setText(QStringLiteral("📁 /未选择联系人/"));
+        renderConversation(QString());
     }
 
     updateContactSelectionState();
     updateDeleteFriendAction();
+    applySelectedFriend();
 }
 
 void MainWindow::updateContactSelectionState() {
@@ -949,11 +979,141 @@ void MainWindow::updateDeleteFriendAction() {
     delete_friend_btn_->setText(QStringLiteral("删除 %1").arg(username));
 }
 
+void MainWindow::renderConversation(const QString& peer) {
+    if (!message_list_layout_ || !message_list_widget_) {
+        return;
+    }
+
+    while (message_list_layout_->count() > 0) {
+        auto* item = message_list_layout_->takeAt(0);
+        if (auto* widget = item->widget()) {
+            widget->deleteLater();
+        }
+        delete item;
+    }
+
+    if (peer.isEmpty()) {
+        auto* empty = new QLabel(QStringLiteral("选择左侧好友后即可查看历史消息并开始聊天。"),
+                                 message_list_widget_);
+        empty->setObjectName(QStringLiteral("mutedLabel"));
+        empty->setAlignment(Qt::AlignCenter);
+        empty->setWordWrap(true);
+        message_list_layout_->addStretch();
+        message_list_layout_->addWidget(empty);
+        message_list_layout_->addStretch();
+        return;
+    }
+
+    const auto it = conversations_.find(peer);
+    if (it == conversations_.end() || it->messages.isEmpty()) {
+        auto* empty = new QLabel(QStringLiteral("还没有聊天记录，发一条消息开始吧。"),
+                                 message_list_widget_);
+        empty->setObjectName(QStringLiteral("mutedLabel"));
+        empty->setAlignment(Qt::AlignCenter);
+        message_list_layout_->addStretch();
+        message_list_layout_->addWidget(empty);
+        message_list_layout_->addStretch();
+        return;
+    }
+
+    QString last_day;
+    for (const auto& message : it->messages) {
+        const auto ts = QDateTime::fromString(message.timestamp, QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"));
+        const QString day_label = ts.isValid()
+            ? ts.date().toString(QStringLiteral("yyyy-MM-dd"))
+            : message.timestamp.left(10);
+        if (!day_label.isEmpty() && day_label != last_day) {
+            auto* day = new QLabel(day_label, message_list_widget_);
+            day->setObjectName(QStringLiteral("dateDividerLabel"));
+            day->setAlignment(Qt::AlignCenter);
+            message_list_layout_->addWidget(day);
+            last_day = day_label;
+        }
+
+        const bool outgoing = (message.from == current_username_);
+        message_list_layout_->addWidget(createMessageBubble(
+            message.content,
+            formatMessageTime(message.timestamp),
+            outgoing,
+            message_list_widget_));
+    }
+    message_list_layout_->addStretch();
+
+    if (message_scroll_area_ && message_scroll_area_->verticalScrollBar()) {
+        QTimer::singleShot(0, this, [this] {
+            if (message_scroll_area_ && message_scroll_area_->verticalScrollBar()) {
+                auto* bar = message_scroll_area_->verticalScrollBar();
+                bar->setValue(bar->maximum());
+            }
+        });
+    }
+}
+
+void MainWindow::appendConversationMessage(const cloudvault::ChatMessage& message) {
+    const QString peer = (message.from == current_username_) ? message.to : message.from;
+    auto& state = conversations_[peer];
+    state.messages.append(message);
+    if (selectedFriend() == peer) {
+        state.unread_count = 0;
+        renderConversation(peer);
+    } else if (message.from != current_username_) {
+        ++state.unread_count;
+    }
+    filterFriendList(contact_search_edit_->text());
+}
+
+void MainWindow::sendCurrentMessage() {
+    const QString peer = selectedFriend();
+    const QString content = message_input_ ? message_input_->toPlainText().trimmed() : QString();
+    if (peer.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("发送消息"),
+                                 QStringLiteral("请先选择一个好友。"));
+        return;
+    }
+    if (content.isEmpty()) {
+        return;
+    }
+    if (content.size() > 2000) {
+        QMessageBox::warning(this, QStringLiteral("发送消息"),
+                             QStringLiteral("单条消息长度不能超过 2000 个字符。"));
+        return;
+    }
+
+    const QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"));
+    appendConversationMessage(cloudvault::ChatMessage{
+        current_username_,
+        peer,
+        content,
+        timestamp,
+    });
+    chat_service_.sendMessage(peer, content);
+    message_input_->clear();
+}
+
+void MainWindow::refreshCurrentConversation() {
+    const QString peer = selectedFriend();
+    renderConversation(peer);
+}
+
+QString MainWindow::formatMessageTime(const QString& timestamp) const {
+    const auto ts = QDateTime::fromString(timestamp, QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"));
+    if (!ts.isValid()) {
+        return timestamp;
+    }
+
+    const auto now = QDateTime::currentDateTime();
+    if (ts.date() == now.date()) {
+        return ts.time().toString(QStringLiteral("HH:mm"));
+    }
+    return ts.date().toString(QStringLiteral("MM-dd"));
+}
+
 void MainWindow::applySelectedFriend() {
     updateContactSelectionState();
 
     const QString username = selectedFriend();
     if (username.isEmpty()) {
+        renderConversation(QString());
         updateDeleteFriendAction();
         return;
     }
@@ -966,6 +1126,12 @@ void MainWindow::applySelectedFriend() {
         online ? QStringLiteral("在线 · 可直接聊天")
                : QStringLiteral("离线 · 静默等待状态更新"));
     file_path_label_->setText(QStringLiteral("📁 /%1/").arg(username));
+    auto& state = conversations_[username];
+    state.unread_count = 0;
+    renderConversation(username);
+    if (!state.history_loaded) {
+        chat_service_.loadHistory(username);
+    }
     updateDeleteFriendAction();
 }
 

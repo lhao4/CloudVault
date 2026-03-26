@@ -155,6 +155,7 @@ bool ServerApp::init(const std::string& config_path) {
 
     auth_handler_ = std::make_unique<cloudvault::AuthHandler>(*db_, sessions_);
     friend_handler_ = std::make_unique<cloudvault::FriendHandler>(*db_, sessions_);
+    chat_handler_ = std::make_unique<cloudvault::ChatHandler>(*db_, sessions_);
 
     // ── 6. 初始化网络层（第七章）─────────────────────────────
     try {
@@ -277,6 +278,23 @@ void ServerApp::registerHandlers() {
                const std::vector<uint8_t>& body) {
             friend_handler_->handleDeleteFriend(conn, hdr, body);
         });
+
+    // 聊天（第十章）
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::CHAT,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            chat_handler_->handleChat(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::GET_HISTORY,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            chat_handler_->handleGetHistory(conn, hdr, body);
+        });
 }
 
 // =============================================================
@@ -321,6 +339,7 @@ void ServerApp::shutdown() {
     event_loop_.reset();
 
     auth_handler_.reset();
+    chat_handler_.reset();
     db_.reset();
 
     spdlog::info("CloudVault Server 已关闭，Bye.");
