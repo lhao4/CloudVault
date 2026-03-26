@@ -15,6 +15,7 @@
 #include "network/auth_service.h"
 #include "network/friend_service.h"
 #include "network/file_service.h"
+#include "network/share_service.h"
 
 #include <QString>
 #include <QWidget>
@@ -74,4 +75,5 @@ private:
     cloudvault::AuthService    auth_service_;
     cloudvault::FriendService  friend_service_;
     cloudvault::FileService    file_service_;
+    cloudvault::ShareService   share_service_;
 };

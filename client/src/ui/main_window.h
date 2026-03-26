@@ -7,6 +7,7 @@
 
 #include "network/friend_service.h"
 #include "network/file_service.h"
+#include "network/share_service.h"
 
 #include <QList>
 #include <QMainWindow>
@@ -30,6 +31,7 @@ public:
     MainWindow(const QString& username,
                cloudvault::FriendService& friend_service,
                cloudvault::FileService& file_service,
+               cloudvault::ShareService& share_service,
                QWidget* parent = nullptr);
     ~MainWindow() override;
 
@@ -71,6 +73,7 @@ private:
     QString current_username_;
     cloudvault::FriendService& friend_service_;
     cloudvault::FileService&   file_service_;
+    cloudvault::ShareService&  share_service_;
     QList<QPair<QString, bool>> friends_;
     cloudvault::FileEntries current_file_entries_;
     QString current_file_path_ = QStringLiteral("/");

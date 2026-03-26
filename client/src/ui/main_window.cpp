@@ -560,11 +560,13 @@ QWidget* createFileItemWidget(const cloudvault::FileEntry& entry,
 MainWindow::MainWindow(const QString& username,
                        cloudvault::FriendService& friend_service,
                        cloudvault::FileService& file_service,
+                       cloudvault::ShareService& share_service,
                        QWidget* parent)
     : QMainWindow(parent),
       current_username_(username),
       friend_service_(friend_service),
-      file_service_(file_service) {
+      file_service_(file_service),
+      share_service_(share_service) {
     setupUi();
     connectSignals();
     friend_service_.flushFriends();
@@ -778,15 +780,22 @@ void MainWindow::setupUi() {
 
         auto* file_action_row = new QHBoxLayout();
         file_action_row->setSpacing(8);
+        file_share_btn_ = new QPushButton(QStringLiteral("↗ 分享"), selection_card);
+        file_share_btn_->setObjectName(QStringLiteral("primaryButton"));
         file_rename_btn_ = new QPushButton(QStringLiteral("✏ 重命名"), selection_card);
         file_rename_btn_->setObjectName(QStringLiteral("lightButton"));
         file_move_btn_ = new QPushButton(QStringLiteral("✂ 移动"), selection_card);
         file_move_btn_->setObjectName(QStringLiteral("lightButton"));
         file_delete_btn_ = new QPushButton(QStringLiteral("🗑 删除"), selection_card);
         file_delete_btn_->setObjectName(QStringLiteral("dangerButton"));
+        file_action_row->addWidget(file_share_btn_);
         file_action_row->addWidget(file_rename_btn_);
         file_action_row->addWidget(file_move_btn_);
         file_action_row->addWidget(file_delete_btn_);
+        file_share_btn_->setEnabled(false);
+        file_rename_btn_->setEnabled(false);
+        file_move_btn_->setEnabled(false);
+        file_delete_btn_->setEnabled(false);
         selection_layout->addLayout(file_action_row);
         page_layout->addWidget(selection_card);
 
@@ -957,6 +966,7 @@ void MainWindow::connectSignals() {
     connect(file_rename_btn_, &QPushButton::clicked, this, &MainWindow::renameSelectedFile);
     connect(file_move_btn_, &QPushButton::clicked, this, &MainWindow::moveSelectedFile);
     connect(file_delete_btn_, &QPushButton::clicked, this, &MainWindow::deleteSelectedFile);
+    connect(file_share_btn_, &QPushButton::clicked, this, &MainWindow::openShareFileDialog);
 
     connect(&friend_service_, &cloudvault::FriendService::friendsRefreshed,
             this, &MainWindow::refreshFriendList);
@@ -1010,6 +1020,38 @@ void MainWindow::connectSignals() {
     connect(&file_service_, &cloudvault::FileService::fileOperationFailed,
             this, [this](const QString& message) {
                 setFileStatus(message, true);
+            });
+    connect(&share_service_, &cloudvault::ShareService::shareRequestSent,
+            this, [this](const QString& message) {
+                setFileStatus(message);
+            });
+    connect(&share_service_, &cloudvault::ShareService::shareRequestFailed,
+            this, [this](const QString& reason) {
+                setFileStatus(reason, true);
+            });
+    connect(&share_service_, &cloudvault::ShareService::incomingShareRequest,
+            this, [this](const QString& from, const QString& file_path) {
+                const auto reply = QMessageBox::question(
+                    this,
+                    QStringLiteral("文件分享"),
+                    QStringLiteral("%1 向你分享了文件 %2，是否接收？")
+                        .arg(from, file_path),
+                    QMessageBox::Yes | QMessageBox::No);
+                if (reply == QMessageBox::Yes) {
+                    share_service_.acceptShare(from, file_path);
+                }
+            });
+    connect(&share_service_, &cloudvault::ShareService::shareAccepted,
+            this, [this](const QString& message) {
+                QMessageBox::information(this, QStringLiteral("文件分享"), message);
+                file_search_mode_ = false;
+                current_file_query_.clear();
+                file_search_edit_->clear();
+                file_service_.listFiles(QStringLiteral("/"));
+            });
+    connect(&share_service_, &cloudvault::ShareService::shareAcceptFailed,
+            this, [this](const QString& reason) {
+                QMessageBox::warning(this, QStringLiteral("文件分享"), reason);
             });
 }
 
@@ -1162,6 +1204,8 @@ void MainWindow::updateFileSelectionState() {
     }
 
     const bool has_selection = file_list_->currentItem() != nullptr;
+    const bool is_file = has_selection && !selectedFileIsDir();
+    file_share_btn_->setEnabled(is_file);
     file_rename_btn_->setEnabled(has_selection);
     file_move_btn_->setEnabled(has_selection);
     file_delete_btn_->setEnabled(has_selection);
@@ -1183,7 +1227,7 @@ void MainWindow::applySelectedFile() {
     detail_file_meta_label_->setText(
         is_dir
             ? QStringLiteral("目录 · 路径：%1\n双击可进入；支持重命名、移动、删除。").arg(path)
-            : QStringLiteral("文件 · 路径：%1\n支持重命名、移动、删除。").arg(path));
+            : QStringLiteral("文件 · 路径：%1\n支持分享、重命名、移动、删除。").arg(path));
 }
 
 void MainWindow::navigateToFilePath(const QString& path) {
@@ -1346,12 +1390,20 @@ void MainWindow::openOnlineUserDialog() {
 }
 
 void MainWindow::openShareFileDialog() {
-    ShareFileDialog dialog(QStringLiteral("report.pdf"), friends_, this);
+    const QString path = selectedFilePath();
+    if (path.isEmpty() || selectedFileIsDir()) {
+        return;
+    }
+
+    const QString file_name = file_list_->currentItem()->data(Qt::UserRole + 2).toString();
+    ShareFileDialog dialog(file_name, friends_, this);
     connect(&dialog, &ShareFileDialog::shareConfirmed,
-            this, [this](const QString&, const QStringList& targets) {
+            this, [this, path](const QString&, const QStringList& targets) {
                 if (!targets.isEmpty()) {
                     detail_file_target_label_->setText(
                         QStringLiteral("已选择分享对象：%1").arg(targets.join(", ")));
+                    setFileStatus(QStringLiteral("正在分享 %1 …").arg(path));
+                    share_service_.shareFile(path, targets);
                 }
             });
     dialog.exec();
