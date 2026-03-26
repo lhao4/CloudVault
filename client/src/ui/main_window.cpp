@@ -285,10 +285,29 @@ QString mainWindowStyle() {
             min-height: 44px;
             max-height: 84px;
             background: #F0F2F5;
-            border: 1px solid #E2E6EA;
-            border-radius: 8px;
+            border: 1.5px solid #E2E6EA;
+            border-radius: 12px;
             padding: 8px 12px;
             font-size: 14px;
+        }
+
+        QTextEdit#messageInput:focus {
+            border-color: #3B82F6;
+        }
+
+        QLineEdit#searchInput {
+            min-height: 32px;
+            max-height: 32px;
+            background: #F0F2F5;
+            border: none;
+            border-radius: 8px;
+            padding: 0 10px;
+            font-size: 12px;
+            color: #111827;
+        }
+
+        QLineEdit#searchInput:focus {
+            background: #E5E7EB;
         }
     )");
 }
@@ -336,33 +355,48 @@ QFrame* createDetailCard(const QString& title,
 QWidget* createMessageBubble(const QString& text,
                              const QString& time,
                              bool outgoing,
+                             const QString& senderName = QString(),
                              QWidget* parent = nullptr) {
     auto* wrap = new QWidget(parent);
+    wrap->setStyleSheet(QStringLiteral("background: transparent;"));
     auto* outer = new QVBoxLayout(wrap);
     outer->setContentsMargins(0, 0, 0, 0);
-    outer->setSpacing(4);
+    outer->setSpacing(0);
 
     auto* bubble_row = new QHBoxLayout();
     bubble_row->setContentsMargins(0, 0, 0, 0);
+    bubble_row->setSpacing(6);
+    bubble_row->setAlignment(Qt::AlignBottom);
 
     auto* bubble = new QLabel(text, wrap);
     bubble->setObjectName(outgoing ? QStringLiteral("outgoingBubble")
                                    : QStringLiteral("incomingBubble"));
     bubble->setWordWrap(true);
-    bubble->setMaximumWidth(320);
+    bubble->setMaximumWidth(300);
+
+    auto* time_label = new QLabel(time, wrap);
+    time_label->setStyleSheet(QStringLiteral("color: #9CA3AF; font-size: 10px; background: transparent;"));
+    time_label->setAlignment(Qt::AlignBottom);
 
     if (outgoing) {
+        // outgoing: [stretch][time][bubble]
         bubble_row->addStretch();
+        bubble_row->addWidget(time_label, 0, Qt::AlignBottom);
         bubble_row->addWidget(bubble);
     } else {
+        // incoming: [avatar][bubble][time][stretch]
+        auto* avatar = new QLabel(senderName.isEmpty() ? QStringLiteral("?") : senderName.left(1).toUpper(), wrap);
+        avatar->setFixedSize(28, 28);
+        avatar->setAlignment(Qt::AlignCenter);
+        avatar->setStyleSheet(QStringLiteral(
+            "background: #3B82F6; color: white; font-size: 9pt; font-weight: bold;"
+            "border-radius: 14px;"));
+        bubble_row->addWidget(avatar, 0, Qt::AlignBottom);
         bubble_row->addWidget(bubble);
+        bubble_row->addWidget(time_label, 0, Qt::AlignBottom);
         bubble_row->addStretch();
     }
     outer->addLayout(bubble_row);
-
-    auto* time_label = new QLabel(time, wrap);
-    time_label->setObjectName(QStringLiteral("timeLabel"));
-    outer->addWidget(time_label, 0, outgoing ? Qt::AlignRight : Qt::AlignLeft);
     return wrap;
 }
 
@@ -517,6 +551,7 @@ void MainWindow::setupUi() {
     sidebar_layout->addLayout(sidebar_header);
 
     contact_search_edit_ = new QLineEdit(sidebar_panel_);
+    contact_search_edit_->setObjectName(QStringLiteral("searchInput"));
     contact_search_edit_->setPlaceholderText(QStringLiteral("搜索联系人…"));
     sidebar_layout->addWidget(contact_search_edit_);
 
@@ -564,9 +599,12 @@ void MainWindow::setupUi() {
         message_scroll_area_->setWidgetResizable(true);
         message_scroll_area_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         message_scroll_area_->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        message_scroll_area_->setStyleSheet(QStringLiteral("QScrollArea { background: transparent; border: none; }"));
+        message_scroll_area_->setStyleSheet(QStringLiteral(
+            "QScrollArea { background: #F4F6F8; border: none; }"
+            "QScrollArea > QWidget > QWidget { background: #F4F6F8; }"));
 
         message_list_widget_ = new QWidget(message_scroll_area_);
+        message_list_widget_->setStyleSheet(QStringLiteral("background: #F4F6F8;"));
         message_list_layout_ = new QVBoxLayout(message_list_widget_);
         message_list_layout_->setContentsMargins(4, 2, 4, 2);
         message_list_layout_->setSpacing(8);
@@ -774,7 +812,7 @@ void MainWindow::setupUi() {
     delete_friend_btn_ = new QPushButton(QStringLiteral("删除好友"), contact_card);
     delete_friend_btn_->setObjectName(QStringLiteral("dangerButton"));
     delete_friend_btn_->setEnabled(false);
-    contact_layout->addWidget(delete_friend_btn_);
+    delete_friend_btn_->hide();
     detail_layout->addWidget(contact_card);
 
     auto* shared_title = new QLabel(QStringLiteral("共享文件"), detail_panel_);
@@ -934,8 +972,9 @@ void MainWindow::filterFriendList(const QString& keyword) {
     }
 
     if (contact_list_->count() == 0) {
-        chat_title_label_->setText(QStringLiteral("● 联系人"));
+        chat_title_label_->setText(QStringLiteral("联系人"));
         chat_status_label_->setText(QStringLiteral("选择一个好友开始聊天"));
+        chat_status_label_->setStyleSheet(QStringLiteral("color: #9CA3AF; font-size: 11px;"));
         detail_contact_name_label_->setText(QStringLiteral("未选择联系人"));
         detail_contact_status_label_->setText(QStringLiteral("请选择左侧联系人"));
         file_path_label_->setText(QStringLiteral("📁 /未选择联系人/"));
@@ -1035,6 +1074,7 @@ void MainWindow::renderConversation(const QString& peer) {
             message.content,
             formatMessageTime(message.timestamp),
             outgoing,
+            outgoing ? QString() : message.from,
             message_list_widget_));
     }
     message_list_layout_->addStretch();
@@ -1119,8 +1159,14 @@ void MainWindow::applySelectedFriend() {
     }
 
     const bool online = selectedFriendOnline();
-    chat_title_label_->setText(QStringLiteral("● %1").arg(username));
-    chat_status_label_->setText(online ? QStringLiteral("在线") : QStringLiteral("离线"));
+    chat_title_label_->setText(username);
+    if (online) {
+        chat_status_label_->setText(QStringLiteral("● 在线"));
+        chat_status_label_->setStyleSheet(QStringLiteral("color: #22C55E; font-size: 11px;"));
+    } else {
+        chat_status_label_->setText(QStringLiteral("● 离线"));
+        chat_status_label_->setStyleSheet(QStringLiteral("color: #9CA3AF; font-size: 11px;"));
+    }
     detail_contact_name_label_->setText(username);
     detail_contact_status_label_->setText(
         online ? QStringLiteral("在线 · 可直接聊天")
