@@ -141,8 +141,10 @@ bool ServerApp::init(const std::string& config_path) {
         return false;
     }
 
+    file_storage_ = std::make_unique<cloudvault::FileStorage>(storage_root);
     auth_handler_ = std::make_unique<cloudvault::AuthHandler>(*db_, sessions_);
     friend_handler_ = std::make_unique<cloudvault::FriendHandler>(*db_, sessions_);
+    file_handler_ = std::make_unique<cloudvault::FileHandler>(sessions_, *file_storage_);
 
     // ── 6. 初始化网络层（第七章）─────────────────────────────
     try {
@@ -265,6 +267,55 @@ void ServerApp::registerHandlers() {
                const std::vector<uint8_t>& body) {
             friend_handler_->handleDeleteFriend(conn, hdr, body);
         });
+
+    // 文件管理（第十一章）
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::FLUSH_FILE,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleList(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::MKDIR,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleMkdir(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::RENAME,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleRename(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::MOVE,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleMove(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::DELETE_FILE,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleDelete(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::SEARCH_FILE,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            file_handler_->handleSearch(conn, hdr, body);
+        });
 }
 
 // =============================================================
@@ -309,6 +360,8 @@ void ServerApp::shutdown() {
     event_loop_.reset();
 
     auth_handler_.reset();
+    file_handler_.reset();
+    file_storage_.reset();
     db_.reset();
 
     spdlog::info("CloudVault Server 已关闭，Bye.");
