@@ -31,6 +31,9 @@ class QSplitter;
 class QTextEdit;
 class QVBoxLayout;
 class QStackedWidget;
+class ChatPanel;
+class FilePanel;
+class DetailPanel;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -151,6 +154,9 @@ private:
     QPushButton* profile_tab_btn_ = nullptr;
 
     QStackedWidget* center_stack_ = nullptr;
+    ChatPanel* chat_panel_widget_ = nullptr;
+    FilePanel* file_panel_widget_ = nullptr;
+    DetailPanel* detail_panel_widget_ = nullptr;
     QStackedWidget* chat_stack_ = nullptr;
 
     QPushButton* group_list_btn_ = nullptr;

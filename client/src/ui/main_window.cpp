@@ -5,6 +5,9 @@
 
 #include "main_window.h"
 
+#include "ui/chat_panel.h"
+#include "ui/detail_panel.h"
+#include "ui/file_panel.h"
 #include "ui/group_list_dialog.h"
 #include "ui/online_user_dialog.h"
 #include "ui/share_file_dialog.h"
@@ -23,7 +26,6 @@
 #include <QGraphicsDropShadowEffect>
 #include <QHBoxLayout>
 #include <QInputDialog>
-#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -445,27 +447,6 @@ private:
     }
 };
 
-class SendTextEdit final : public QTextEdit {
-    Q_OBJECT
-
-public:
-    using QTextEdit::QTextEdit;
-
-signals:
-    void submitRequested();
-
-protected:
-    void keyPressEvent(QKeyEvent* event) override {
-        if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
-            && !(event->modifiers() & Qt::ShiftModifier)) {
-            emit submitRequested();
-            event->accept();
-            return;
-        }
-        QTextEdit::keyPressEvent(event);
-    }
-};
-
 QWidget* createContactItemWidget(const QString& username,
                                  const QString& preview,
                                  const QString& time,
@@ -746,336 +727,45 @@ void MainWindow::setupUi() {
     center_layout->addWidget(center_stack_, 1);
 
     {
-        auto* page = new QWidget(center_stack_);
-        page->setObjectName(QStringLiteral("chatPage"));
-        auto* page_layout = new QVBoxLayout(page);
-        page_layout->setContentsMargins(0, 0, 0, 0);
-        page_layout->setSpacing(0);
-
-        chat_stack_ = new QStackedWidget(page);
-        page_layout->addWidget(chat_stack_);
-
-        auto* empty_page = new QWidget(chat_stack_);
-        auto* empty_layout = new QVBoxLayout(empty_page);
-        empty_layout->setContentsMargins(0, 0, 0, 0);
-        empty_layout->setSpacing(8);
-        empty_layout->addStretch();
-
-        auto* empty_icon = new QLabel(QStringLiteral("💬"), empty_page);
-        empty_icon->setObjectName(QStringLiteral("chatEmptyIcon"));
-        empty_icon->setAlignment(Qt::AlignCenter);
-        empty_layout->addWidget(empty_icon, 0, Qt::AlignHCenter);
-
-        auto* empty_title = new QLabel(QStringLiteral("选择一位联系人开始聊天"), empty_page);
-        empty_title->setObjectName(QStringLiteral("chatEmptyTitle"));
-        empty_title->setAlignment(Qt::AlignCenter);
-        empty_layout->addWidget(empty_title);
-
-        auto* empty_hint = new QLabel(QStringLiteral("从左侧联系人列表中选择一个会话。"), empty_page);
-        empty_hint->setObjectName(QStringLiteral("chatEmptyHint"));
-        empty_hint->setAlignment(Qt::AlignCenter);
-        empty_layout->addWidget(empty_hint);
-        empty_layout->addStretch();
-        chat_stack_->addWidget(empty_page);
-
-        auto* conversation_page = new QWidget(chat_stack_);
-        auto* conversation_layout = new QVBoxLayout(conversation_page);
-        conversation_layout->setContentsMargins(0, 0, 0, 0);
-        conversation_layout->setSpacing(0);
-
-        auto* chat_top_bar = new QFrame(conversation_page);
-        chat_top_bar->setObjectName(QStringLiteral("chatTopBar"));
-        chat_top_bar->setFixedHeight(56);
-        auto* chat_top_layout = new QHBoxLayout(chat_top_bar);
-        chat_top_layout->setContentsMargins(16, 0, 16, 0);
-        chat_top_layout->setSpacing(10);
-
-        chat_top_layout->addWidget(createAvatarWidget(current_username_, 34, false, chat_top_bar));
-        chat_avatar_label_ = qobject_cast<QLabel*>(
-            chat_top_bar->findChild<QLabel*>(QStringLiteral("avatarBadge")));
-        if (chat_avatar_label_) {
-            prepareAvatarBadge(chat_avatar_label_, current_username_, 34);
-        }
-
-        auto* chat_text_layout = new QVBoxLayout();
-        chat_text_layout->setContentsMargins(0, 7, 0, 7);
-        chat_text_layout->setSpacing(1);
-
-        chat_title_label_ = new QLabel(QStringLiteral("联系人"), chat_top_bar);
-        chat_title_label_->setObjectName(QStringLiteral("chatTitle"));
-        chat_text_layout->addWidget(chat_title_label_);
-
-        chat_status_label_ = new QLabel(QStringLiteral("请选择联系人开始聊天"), chat_top_bar);
-        chat_status_label_->setObjectName(QStringLiteral("chatStatus"));
-        chat_text_layout->addWidget(chat_status_label_);
-        chat_top_layout->addLayout(chat_text_layout, 1);
-
-        group_list_btn_ = createIconButton(QStringLiteral("组"),
-                                           QStringLiteral("群组列表"),
-                                           30,
-                                           chat_top_bar);
-        chat_top_layout->addWidget(group_list_btn_);
-        chat_top_layout->addWidget(createIconButton(QStringLiteral("附"),
-                                                    QStringLiteral("附件"),
-                                                    30,
-                                                    chat_top_bar));
-        chat_top_layout->addWidget(createIconButton(QStringLiteral("…"),
-                                                    QStringLiteral("更多"),
-                                                    30,
-                                                    chat_top_bar));
-        conversation_layout->addWidget(chat_top_bar);
-
-        message_list_ = new QListWidget(conversation_page);
-        message_list_->setObjectName(QStringLiteral("messageList"));
-        message_list_->setSelectionMode(QAbstractItemView::NoSelection);
-        message_list_->setFocusPolicy(Qt::NoFocus);
-        message_list_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+        chat_panel_widget_ = new ChatPanel(current_username_, center_stack_);
+        chat_stack_ = chat_panel_widget_->stack();
+        chat_avatar_label_ = chat_panel_widget_->avatarLabel();
+        chat_title_label_ = chat_panel_widget_->titleLabel();
+        chat_status_label_ = chat_panel_widget_->statusLabel();
+        group_chat_title_label_ = chat_panel_widget_->groupTitleLabel();
+        group_chat_status_label_ = chat_panel_widget_->groupStatusLabel();
+        message_list_ = chat_panel_widget_->messageList();
         message_list_->setItemDelegate(new MessageBubbleDelegate(message_list_));
-        conversation_layout->addWidget(message_list_, 1);
-
-        auto* compose_bar = new QFrame(conversation_page);
-        compose_bar->setObjectName(QStringLiteral("composeBar"));
-        auto* compose_layout = new QHBoxLayout(compose_bar);
-        compose_layout->setContentsMargins(12, 10, 12, 10);
-        compose_layout->setSpacing(8);
-        compose_layout->addWidget(createIconButton(QStringLiteral("表"),
-                                                   QStringLiteral("表情"),
-                                                   34,
-                                                   compose_bar));
-        compose_layout->addWidget(createIconButton(QStringLiteral("附"),
-                                                   QStringLiteral("发送文件"),
-                                                   34,
-                                                   compose_bar));
-
-        message_input_ = new SendTextEdit(compose_bar);
-        message_input_->setObjectName(QStringLiteral("messageInput"));
-        message_input_->setPlaceholderText(QStringLiteral("输入消息…"));
-        compose_layout->addWidget(message_input_, 1);
-
-        send_btn_ = new QPushButton(QStringLiteral("➤"), compose_bar);
-        send_btn_->setObjectName(QStringLiteral("primaryBtn"));
-        send_btn_->setCursor(Qt::PointingHandCursor);
-        send_btn_->setFixedSize(44, 44);
-        compose_layout->addWidget(send_btn_);
-        conversation_layout->addWidget(compose_bar);
-
-        chat_stack_->addWidget(conversation_page);
-
-        auto* group_page = new QWidget(chat_stack_);
-        auto* group_layout = new QVBoxLayout(group_page);
-        group_layout->setContentsMargins(0, 0, 0, 0);
-        group_layout->setSpacing(0);
-
-        auto* group_top_bar = new QFrame(group_page);
-        group_top_bar->setObjectName(QStringLiteral("chatTopBar"));
-        group_top_bar->setFixedHeight(56);
-        auto* group_top_layout = new QHBoxLayout(group_top_bar);
-        group_top_layout->setContentsMargins(16, 0, 16, 0);
-        group_top_layout->setSpacing(10);
-
-        group_top_layout->addWidget(createAvatarWidget(QStringLiteral("群"), 34, false, group_top_bar));
-
-        auto* group_text_layout = new QVBoxLayout();
-        group_text_layout->setContentsMargins(0, 7, 0, 7);
-        group_text_layout->setSpacing(1);
-
-        group_chat_title_label_ = new QLabel(QStringLiteral("群聊"), group_top_bar);
-        group_chat_title_label_->setObjectName(QStringLiteral("chatTitle"));
-        group_text_layout->addWidget(group_chat_title_label_);
-
-        group_chat_status_label_ = new QLabel(QStringLiteral("当前版本尚未接入群聊后端"), group_top_bar);
-        group_chat_status_label_->setObjectName(QStringLiteral("chatStatus"));
-        group_text_layout->addWidget(group_chat_status_label_);
-        group_top_layout->addLayout(group_text_layout, 1);
-        group_layout->addWidget(group_top_bar);
-
-        auto* group_empty = new QWidget(group_page);
-        auto* group_empty_layout = new QVBoxLayout(group_empty);
-        group_empty_layout->setContentsMargins(0, 0, 0, 0);
-        group_empty_layout->setSpacing(8);
-        group_empty_layout->addStretch();
-
-        auto* group_icon = new QLabel(QStringLiteral("👥"), group_empty);
-        group_icon->setObjectName(QStringLiteral("chatEmptyIcon"));
-        group_icon->setAlignment(Qt::AlignCenter);
-        group_empty_layout->addWidget(group_icon, 0, Qt::AlignHCenter);
-
-        auto* group_title = new QLabel(QStringLiteral("群聊界面已就绪"), group_empty);
-        group_title->setObjectName(QStringLiteral("chatEmptyTitle"));
-        group_title->setAlignment(Qt::AlignCenter);
-        group_empty_layout->addWidget(group_title);
-
-        auto* group_hint = new QLabel(QStringLiteral("当前版本仅提供群组 UI 流程，消息后端待接入。"), group_empty);
-        group_hint->setObjectName(QStringLiteral("chatEmptyHint"));
-        group_hint->setAlignment(Qt::AlignCenter);
-        group_empty_layout->addWidget(group_hint);
-        group_empty_layout->addStretch();
-        group_layout->addWidget(group_empty, 1);
-
-        chat_stack_->addWidget(group_page);
-        center_stack_->addWidget(page);
+        message_input_ = chat_panel_widget_->messageInput();
+        send_btn_ = chat_panel_widget_->sendButton();
+        group_list_btn_ = chat_panel_widget_->groupListButton();
+        center_stack_->addWidget(chat_panel_widget_);
     }
 
     {
-        auto* page = new QWidget(center_stack_);
-        page->setObjectName(QStringLiteral("filePage"));
-        auto* page_layout = new QVBoxLayout(page);
-        page_layout->setContentsMargins(0, 0, 0, 0);
-        page_layout->setSpacing(0);
-
-        auto* top_bar = new QFrame(page);
-        top_bar->setObjectName(QStringLiteral("fileTopBar"));
-        top_bar->setFixedHeight(56);
-        auto* top_layout = new QHBoxLayout(top_bar);
-        top_layout->setContentsMargins(20, 0, 20, 0);
-        top_layout->setSpacing(8);
-
-        file_path_label_ = new QLabel(QStringLiteral("/"), top_bar);
-        file_path_label_->setObjectName(QStringLiteral("filePathLabel"));
-        file_path_label_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-        top_layout->addWidget(file_path_label_, 1);
-
-        file_back_btn_ = new QPushButton(QStringLiteral("返回"), top_bar);
-        file_back_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-        top_layout->addWidget(file_back_btn_);
-
-        file_upload_btn_ = new QPushButton(QStringLiteral("上传"), top_bar);
-        file_upload_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-        top_layout->addWidget(file_upload_btn_);
-
-        file_refresh_btn_ = new QPushButton(QStringLiteral("刷新"), top_bar);
-        file_refresh_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-        top_layout->addWidget(file_refresh_btn_);
-
-        file_create_btn_ = new QPushButton(QStringLiteral("+ 新建"), top_bar);
-        file_create_btn_->setObjectName(QStringLiteral("primaryFileBtn"));
-        top_layout->addWidget(file_create_btn_);
-        page_layout->addWidget(top_bar);
-
-        auto* search_row = new QFrame(page);
-        search_row->setObjectName(QStringLiteral("fileSearchRow"));
-        auto* search_layout = new QHBoxLayout(search_row);
-        search_layout->setContentsMargins(16, 10, 16, 10);
-        search_layout->setSpacing(0);
-
-        file_search_edit_ = new QLineEdit(search_row);
-        file_search_edit_->setPlaceholderText(QStringLiteral("搜索文件、回车确认…"));
-        search_layout->addWidget(file_search_edit_);
-        page_layout->addWidget(search_row);
-
-        auto* table_header = new QFrame(page);
-        table_header->setObjectName(QStringLiteral("fileTableHeader"));
-        table_header->setFixedHeight(40);
-        auto* table_header_layout = new QHBoxLayout(table_header);
-        table_header_layout->setContentsMargins(14, 0, 14, 0);
-        table_header_layout->setSpacing(12);
-
-        auto* name_header = new QLabel(QStringLiteral("名称"), table_header);
-        name_header->setObjectName(QStringLiteral("fileColumnLabel"));
-        table_header_layout->addSpacing(22);
-        table_header_layout->addWidget(name_header, 1);
-
-        auto* size_header = new QLabel(QStringLiteral("大小"), table_header);
-        size_header->setObjectName(QStringLiteral("fileColumnLabel"));
-        size_header->setFixedWidth(120);
-        size_header->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        table_header_layout->addWidget(size_header);
-
-        auto* time_header = new QLabel(QStringLiteral("修改时间"), table_header);
-        time_header->setObjectName(QStringLiteral("fileColumnLabel"));
-        time_header->setFixedWidth(140);
-        time_header->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        table_header_layout->addWidget(time_header);
-
-        auto* type_header = new QLabel(QStringLiteral("类型"), table_header);
-        type_header->setObjectName(QStringLiteral("fileColumnLabel"));
-        type_header->setFixedWidth(80);
-        type_header->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-        table_header_layout->addWidget(type_header);
-        page_layout->addWidget(table_header);
-
-        file_list_ = new QListWidget(page);
-        file_list_->setObjectName(QStringLiteral("fileList"));
-        file_list_->setSpacing(0);
-        file_list_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-        page_layout->addWidget(file_list_, 1);
-
-        file_empty_state_label_ = new QLabel(
-            QStringLiteral("当前目录为空\n点击“+ 新建”或使用“上传”开始管理文件"),
-            page);
-        file_empty_state_label_->setObjectName(QStringLiteral("emptyStateLabel"));
-        file_empty_state_label_->setAlignment(Qt::AlignCenter);
-        file_empty_state_label_->hide();
-        page_layout->addWidget(file_empty_state_label_);
-
-        file_transfer_row_ = new QFrame(page);
-        file_transfer_row_->setObjectName(QStringLiteral("fileTransferRow"));
-        file_transfer_row_->hide();
-        auto* transfer_layout = new QHBoxLayout(file_transfer_row_);
-        transfer_layout->setContentsMargins(16, 0, 16, 0);
-        transfer_layout->setSpacing(10);
-
-        file_transfer_label_ = new QLabel(QStringLiteral("文件传输"), file_transfer_row_);
-        file_transfer_label_->setObjectName(QStringLiteral("transferLabel"));
-        transfer_layout->addWidget(file_transfer_label_);
-
-        file_transfer_bar_ = new QProgressBar(file_transfer_row_);
-        file_transfer_bar_->setTextVisible(false);
-        file_transfer_bar_->setRange(0, 100);
-        transfer_layout->addWidget(file_transfer_bar_, 1);
-
-        file_transfer_percent_label_ = new QLabel(QStringLiteral("0%"), file_transfer_row_);
-        file_transfer_percent_label_->setObjectName(QStringLiteral("transferPercent"));
-        transfer_layout->addWidget(file_transfer_percent_label_);
-
-        file_transfer_cancel_btn_ = new QPushButton(QStringLiteral("取消"), file_transfer_row_);
-        file_transfer_cancel_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-        file_transfer_cancel_btn_->setFixedHeight(28);
-        transfer_layout->addWidget(file_transfer_cancel_btn_);
-        page_layout->addWidget(file_transfer_row_);
-
-        auto* footer = new QFrame(page);
-        footer->setObjectName(QStringLiteral("fileActionBar"));
-        footer->setFixedHeight(56);
-        auto* footer_layout = new QHBoxLayout(footer);
-        footer_layout->setContentsMargins(16, 0, 16, 0);
-        footer_layout->setSpacing(8);
-
-        auto* summary_layout = new QVBoxLayout();
-        summary_layout->setContentsMargins(0, 8, 0, 8);
-        summary_layout->setSpacing(1);
-        detail_file_target_label_ = new QLabel(QStringLiteral("选中：未选择文件"), footer);
-        detail_file_target_label_->setObjectName(QStringLiteral("fileSelectionLabel"));
-        summary_layout->addWidget(detail_file_target_label_);
-
-        detail_file_meta_label_ = new QLabel(QStringLiteral("未选择文件"), footer);
-        detail_file_meta_label_->setObjectName(QStringLiteral("fileStatusLabel"));
-        summary_layout->addWidget(detail_file_meta_label_);
-        file_status_label_ = detail_file_meta_label_;
-        footer_layout->addLayout(summary_layout, 1);
-
-        file_download_btn_ = new QPushButton(QStringLiteral("下载"), footer);
-        file_download_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-        footer_layout->addWidget(file_download_btn_);
-
-        file_share_btn_ = new QPushButton(QStringLiteral("分享"), footer);
-        file_share_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-        footer_layout->addWidget(file_share_btn_);
-
-        file_rename_btn_ = new QPushButton(QStringLiteral("重命名"), footer);
-        file_rename_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-        footer_layout->addWidget(file_rename_btn_);
-
-        file_move_btn_ = new QPushButton(QStringLiteral("移动"), footer);
-        file_move_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-        footer_layout->addWidget(file_move_btn_);
-
-        file_delete_btn_ = new QPushButton(QStringLiteral("删除"), footer);
-        file_delete_btn_->setObjectName(QStringLiteral("deleteBtn"));
-        footer_layout->addWidget(file_delete_btn_);
-        page_layout->addWidget(footer);
-
-        center_stack_->addWidget(page);
+        file_panel_widget_ = new FilePanel(center_stack_);
+        file_path_label_ = file_panel_widget_->pathLabel();
+        file_status_label_ = file_panel_widget_->statusLabel();
+        file_search_edit_ = file_panel_widget_->searchEdit();
+        file_list_ = file_panel_widget_->fileList();
+        file_empty_state_label_ = file_panel_widget_->emptyStateLabel();
+        file_back_btn_ = file_panel_widget_->backButton();
+        file_upload_btn_ = file_panel_widget_->uploadButton();
+        file_refresh_btn_ = file_panel_widget_->refreshButton();
+        file_create_btn_ = file_panel_widget_->createButton();
+        file_transfer_row_ = file_panel_widget_->transferRow();
+        file_transfer_label_ = file_panel_widget_->transferLabel();
+        file_transfer_percent_label_ = file_panel_widget_->transferPercentLabel();
+        file_transfer_bar_ = file_panel_widget_->transferBar();
+        file_transfer_cancel_btn_ = file_panel_widget_->transferCancelButton();
+        detail_file_target_label_ = file_panel_widget_->selectionLabel();
+        detail_file_meta_label_ = file_panel_widget_->metaLabel();
+        file_download_btn_ = file_panel_widget_->downloadButton();
+        file_share_btn_ = file_panel_widget_->shareButton();
+        file_rename_btn_ = file_panel_widget_->renameButton();
+        file_move_btn_ = file_panel_widget_->moveButton();
+        file_delete_btn_ = file_panel_widget_->deleteButton();
+        center_stack_->addWidget(file_panel_widget_);
     }
 
     {
@@ -1162,86 +852,17 @@ void MainWindow::setupUi() {
         center_stack_->addWidget(page);
     }
 
-    detail_panel_ = new QFrame(content_splitter_);
-    detail_panel_->setObjectName(QStringLiteral("detailPanel"));
-    qobject_cast<QFrame*>(detail_panel_)->setMinimumWidth(220);
-    qobject_cast<QFrame*>(detail_panel_)->setMaximumWidth(220);
-    auto* detail_layout = new QVBoxLayout(detail_panel_);
-    detail_layout->setContentsMargins(0, 0, 0, 0);
-    detail_layout->setSpacing(0);
-
-    auto* detail_header = new QFrame(detail_panel_);
-    detail_header->setObjectName(QStringLiteral("detailHeader"));
-    detail_header->setFixedHeight(56);
-    auto* detail_header_layout = new QHBoxLayout(detail_header);
-    detail_header_layout->setContentsMargins(16, 0, 16, 0);
-    auto* detail_title = new QLabel(QStringLiteral("详情"), detail_header);
-    detail_title->setObjectName(QStringLiteral("detailTitle"));
-    detail_header_layout->addWidget(detail_title);
-    detail_header_layout->addStretch();
-    detail_layout->addWidget(detail_header);
-
-    auto* detail_body = new QWidget(detail_panel_);
-    auto* detail_body_layout = new QVBoxLayout(detail_body);
-    detail_body_layout->setContentsMargins(14, 14, 14, 14);
-    detail_body_layout->setSpacing(14);
-
-    auto* contact_section = new QFrame(detail_body);
-    contact_section->setObjectName(QStringLiteral("detailSection"));
-    auto* contact_section_layout = new QVBoxLayout(contact_section);
-    contact_section_layout->setContentsMargins(14, 14, 14, 14);
-    contact_section_layout->setSpacing(10);
-
-    auto* contact_kicker = new QLabel(QStringLiteral("CONTACT"), contact_section);
-    contact_kicker->setObjectName(QStringLiteral("sectionKicker"));
-    contact_section_layout->addWidget(contact_kicker);
-
-    auto* contact_info_row = new QHBoxLayout();
-    contact_info_row->setSpacing(8);
-    detail_contact_avatar_label_ = new QLabel(contact_section);
-    prepareAvatarBadge(detail_contact_avatar_label_, current_username_, 26);
-    contact_info_row->addWidget(detail_contact_avatar_label_, 0, Qt::AlignTop);
-
-    auto* contact_text_layout = new QVBoxLayout();
-    contact_text_layout->setContentsMargins(0, 0, 0, 0);
-    contact_text_layout->setSpacing(1);
-    detail_contact_name_label_ = new QLabel(QStringLiteral("未选择联系人"), contact_section);
-    detail_contact_name_label_->setObjectName(QStringLiteral("detailContactName"));
-    contact_text_layout->addWidget(detail_contact_name_label_);
-
-    detail_contact_status_label_ = new QLabel(QStringLiteral("请选择左侧联系人"), contact_section);
-    detail_contact_status_label_->setObjectName(QStringLiteral("detailMeta"));
-    contact_text_layout->addWidget(detail_contact_status_label_);
-    contact_info_row->addLayout(contact_text_layout, 1);
-    contact_section_layout->addLayout(contact_info_row);
-    detail_body_layout->addWidget(contact_section);
-
-    auto* files_section = new QFrame(detail_body);
-    files_section->setObjectName(QStringLiteral("detailSection"));
-    auto* files_section_layout = new QVBoxLayout(files_section);
-    files_section_layout->setContentsMargins(14, 14, 14, 14);
-    files_section_layout->setSpacing(10);
-
-    auto* files_kicker = new QLabel(QStringLiteral("SHARED FILES"), files_section);
-    files_kicker->setObjectName(QStringLiteral("sectionKicker"));
-    files_section_layout->addWidget(files_kicker);
-
-    detail_shared_empty_label_ = new QLabel(QStringLiteral("选择联系人后可查看共享文件"), files_section);
-    detail_shared_empty_label_->setObjectName(QStringLiteral("detailMeta"));
-    detail_shared_empty_label_->setWordWrap(true);
-    files_section_layout->addWidget(detail_shared_empty_label_);
-
-    detail_shared_files_layout_ = new QVBoxLayout();
-    detail_shared_files_layout_->setContentsMargins(0, 0, 0, 0);
-    detail_shared_files_layout_->setSpacing(10);
-    files_section_layout->addLayout(detail_shared_files_layout_);
-    detail_body_layout->addWidget(files_section);
-    detail_body_layout->addStretch();
-    detail_layout->addWidget(detail_body, 1);
+    detail_panel_widget_ = new DetailPanel(current_username_, content_splitter_);
+    detail_panel_ = detail_panel_widget_;
+    detail_contact_avatar_label_ = detail_panel_widget_->contactAvatarLabel();
+    detail_contact_name_label_ = detail_panel_widget_->contactNameLabel();
+    detail_contact_status_label_ = detail_panel_widget_->contactStatusLabel();
+    detail_shared_files_layout_ = detail_panel_widget_->sharedFilesLayout();
+    detail_shared_empty_label_ = detail_panel_widget_->sharedEmptyLabel();
 
     content_splitter_->addWidget(sidebar_panel_);
     content_splitter_->addWidget(center_panel);
-    content_splitter_->addWidget(detail_panel_);
+    content_splitter_->addWidget(detail_panel_widget_);
     content_splitter_->setStretchFactor(1, 1);
     content_splitter_->setSizes({260, 420, 220});
 
@@ -1316,7 +937,7 @@ void MainWindow::connectSignals() {
     });
 
     connect(send_btn_, &QPushButton::clicked, this, &MainWindow::sendCurrentMessage);
-    connect(qobject_cast<SendTextEdit*>(message_input_), &SendTextEdit::submitRequested,
+    connect(chat_panel_widget_, &ChatPanel::sendRequested,
             this, &MainWindow::sendCurrentMessage);
     connect(group_list_btn_, &QPushButton::clicked, this, &MainWindow::openGroupListDialog);
     connect(contact_search_edit_, &QLineEdit::textChanged,
@@ -2477,8 +2098,6 @@ bool MainWindow::selectedFileIsDir() const {
     }
     return false;
 }
-
-#include "main_window.moc"
 
 void MainWindow::appendDateDividerIfNeeded(const QString& timestamp) {
     const QString current_date = dateKeyForTimestamp(timestamp);
