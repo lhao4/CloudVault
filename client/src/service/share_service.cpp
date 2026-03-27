@@ -1,9 +1,9 @@
 // =============================================================
-// client/src/network/share_service.cpp
+// client/src/service/share_service.cpp
 // 第十三章：文件分享协议封装
 // =============================================================
 
-#include "network/share_service.h"
+#include "service/share_service.h"
 
 #include "common/protocol.h"
 #include "common/protocol_codec.h"

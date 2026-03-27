@@ -8,34 +8,42 @@
   <property name="windowTitle">
    <string>CloudVault</string>
   </property>
-  <!-- 主布局：左右边距撑满 -->
   <layout class="QVBoxLayout" name="mainLayout">
    <property name="leftMargin"><number>40</number></property>
    <property name="topMargin"><number>40</number></property>
    <property name="rightMargin"><number>40</number></property>
    <property name="bottomMargin"><number>32</number></property>
    <property name="spacing"><number>0</number></property>
-   <!-- ③ card 改为透明，去掉视觉边框 -->
    <item>
     <widget class="QWidget" name="card">
-     <property name="styleSheet">
-      <string>QWidget#card { background: transparent; border: none; }</string>
-     </property>
      <layout class="QVBoxLayout" name="cardLayout">
-      <property name="leftMargin"><number>0</number></property>
-      <property name="topMargin"><number>0</number></property>
-      <property name="rightMargin"><number>0</number></property>
-      <property name="bottomMargin"><number>0</number></property>
+      <property name="leftMargin"><number>28</number></property>
+      <property name="topMargin"><number>28</number></property>
+      <property name="rightMargin"><number>28</number></property>
+      <property name="bottomMargin"><number>28</number></property>
       <property name="spacing"><number>20</number></property>
-      <!-- Header：图标 + 标题 + 副标题 -->
       <item>
        <widget class="QWidget" name="headerWidget">
         <layout class="QHBoxLayout" name="headerLayout">
-         <property name="spacing"><number>0</number></property>
+         <property name="spacing"><number>12</number></property>
          <property name="leftMargin"><number>0</number></property>
          <property name="topMargin"><number>0</number></property>
          <property name="rightMargin"><number>0</number></property>
          <property name="bottomMargin"><number>0</number></property>
+         <item>
+          <widget class="QLabel" name="appIcon">
+           <property name="minimumSize">
+            <size><width>36</width><height>36</height></size>
+           </property>
+           <property name="maximumSize">
+            <size><width>36</width><height>36</height></size>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+           <property name="text"><string>💬</string></property>
+          </widget>
+         </item>
          <item>
           <widget class="QWidget" name="titleWidget">
            <layout class="QVBoxLayout" name="titleLayout">

@@ -1,5 +1,5 @@
 QWidget {
-    font-family: "Microsoft YaHei UI", "PingFang SC", "Segoe UI";
+    font-family: "DM Sans", "PingFang SC", "Microsoft YaHei UI", "Segoe UI", sans-serif;
     font-size: 13px;
     color: #111827;
     background: transparent;
@@ -200,8 +200,16 @@ QListWidget#messageList {
 
 QListWidget#contactList,
 QListWidget#fileList,
-QListWidget#dialogList {
+QListWidget#dialogList,
+QListWidget#eventLogList {
     background: #FFFFFF;
+}
+
+QListWidget#eventLogList {
+    border: none;
+    font-family: "DM Mono", "Consolas", "Courier New", monospace;
+    font-size: 12px;
+    color: #374151;
 }
 
 QScrollBar:vertical {
@@ -244,8 +252,16 @@ QSplitter::handle {
 }
 
 QFrame#sidebarPanel,
-QFrame#detailPanel {
+QFrame#detailPanel,
+QFrame#eventLogPanel,
+QFrame#eventLogHeader {
     background: #FFFFFF;
+}
+
+QFrame#connectionBanner {
+    background: #FEF2F2;
+    border-bottom: 1px solid #FECACA;
+    min-height: 40px;
 }
 
 QFrame#sidebarHeader,
@@ -270,7 +286,8 @@ QFrame#sidebarHeader,
 QFrame#detailHeader,
 QFrame#chatTopBar,
 QFrame#fileTopBar,
-QFrame#dialogHeader {
+QFrame#dialogHeader,
+QFrame#eventLogHeader {
     border-bottom: 1px solid #E2E6EA;
 }
 
@@ -281,6 +298,10 @@ QFrame#dialogFooter {
 }
 
 QFrame#navBar {
+    border-top: 1px solid #E2E6EA;
+}
+
+QFrame#eventLogPanel {
     border-top: 1px solid #E2E6EA;
 }
 
@@ -306,10 +327,17 @@ QLabel#sidebarTitle,
 QLabel#chatTitle,
 QLabel#detailTitle,
 QLabel#profileName,
-QLabel#dialogTitle {
+QLabel#dialogTitle,
+QLabel#eventLogTitle {
     color: #111827;
     font-size: 15px;
     font-weight: 700;
+}
+
+QLabel#connectionBannerLabel {
+    color: #EF4444;
+    font-size: 13px;
+    font-weight: 500;
 }
 
 QLabel#filePathLabel,
@@ -386,6 +414,18 @@ QLabel#emptyStateLabel,
 QLabel#dialogEmptyLabel {
     color: #9CA3AF;
     font-size: 13px;
+}
+
+QToolButton#eventLogToggleBtn {
+    background: transparent;
+    border: none;
+    color: #6B7280;
+    font-size: 12px;
+    padding: 0;
+}
+
+QToolButton#eventLogToggleBtn:hover {
+    color: #111827;
 }
 
 QLabel#emptyStateLabel,

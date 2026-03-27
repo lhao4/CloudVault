@@ -1,5 +1,5 @@
 // =============================================================
-// client/src/network/auth_service.h
+// client/src/service/auth_service.h
 // 用户认证服务（注册 / 登录 / 登出）
 //
 // 职责：

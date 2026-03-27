@@ -1,9 +1,9 @@
 // =============================================================
-// client/src/network/file_service.cpp
+// client/src/service/file_service.cpp
 // 第十一、十二章：文件管理与文件传输协议封装
 // =============================================================
 
-#include "network/file_service.h"
+#include "service/file_service.h"
 
 #include "common/protocol.h"
 #include "common/protocol_codec.h"

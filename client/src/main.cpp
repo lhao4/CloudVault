@@ -11,8 +11,9 @@
 #include <QFont>          // 用于设置全局字体
 #include <QIcon>          // 用于设置应用图标
 #include <QScreen>        // 用于获取屏幕尺寸（居中显示）
+#include <QWidget>
 
-#include "ui/login_window.h"
+#include "app.h"
 
 namespace {
 
@@ -85,8 +86,9 @@ int main(int argc, char* argv[]) {
     }
 
     QFont font;
-    font.setFamilies({QStringLiteral("Microsoft YaHei UI"),
+    font.setFamilies({QStringLiteral("DM Sans"),
                       QStringLiteral("PingFang SC"),
+                      QStringLiteral("Microsoft YaHei UI"),
                       QStringLiteral("Segoe UI")});
     font.setPointSizeF(10.0);
     app.setFont(font);
@@ -96,20 +98,23 @@ int main(int argc, char* argv[]) {
         app.setStyleSheet(global_qss);
     }
 
-    // 创建并显示登录窗口
-    // 注意：LoginWindow 在栈上创建，QApplication 退出前它不会析构
-    LoginWindow window;
+    App app_controller;
+    QWidget* window = app_controller.initialWindow();
+    if (!window) {
+        return 1;
+    }
+
     if (!app_icon.isNull()) {
-        window.setWindowIcon(app_icon);
+        window->setWindowIcon(app_icon);
     }
 
     // 居中显示：先检查 primaryScreen() 是否有效（WSL 下偶尔为 nullptr）
     if (auto* screen = QGuiApplication::primaryScreen()) {
         const QRect screen_geo = screen->availableGeometry();
-        window.move(screen_geo.center() - window.rect().center());
+        window->move(screen_geo.center() - window->rect().center());
     }
 
-    window.show();
+    window->show();
 
     // app.exec()：启动 Qt 事件循环，阻塞直到窗口关闭
     // 返回值是退出码（正常退出返回 0）

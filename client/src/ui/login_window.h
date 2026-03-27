@@ -12,11 +12,7 @@
 
 #include "network/tcp_client.h"
 #include "network/response_router.h"
-#include "network/auth_service.h"
-#include "network/chat_service.h"
-#include "network/friend_service.h"
-#include "network/file_service.h"
-#include "network/share_service.h"
+#include "service/auth_service.h"
 
 #include <QString>
 #include <QWidget>
@@ -27,14 +23,20 @@
 QT_BEGIN_NAMESPACE
 namespace Ui { class LoginWindow; }
 QT_END_NAMESPACE
-class MainWindow;
 
 class LoginWindow : public QWidget {
     Q_OBJECT
 
 public:
-    explicit LoginWindow(QWidget* parent = nullptr);
+    explicit LoginWindow(cloudvault::TcpClient& tcp_client,
+                         cloudvault::ResponseRouter& router,
+                         cloudvault::AuthService& auth_service,
+                         QWidget* parent = nullptr);
     ~LoginWindow() override;  // 在 .cpp 中定义为 = default（unique_ptr 需要完整类型）
+
+    void handleLoggedOut();
+    void reconnectToConfiguredServer(int delay_ms = 0);
+    bool hasServerConfig() const;
 
 private slots:
     void onLoginClicked();
@@ -48,6 +50,9 @@ private slots:
     void onServerDisconnected();
     void onServerError(const QString& message);
 
+signals:
+    void loginSucceeded(const QString& username);
+
 private:
     void setupStyle();        // 应用 QSS 样式表
     void connectSignals();    // 绑定信号槽
@@ -60,21 +65,13 @@ private:
     QString serverEndpoint() const;
 
     std::unique_ptr<Ui::LoginWindow> ui_;  // RAII 管理，析构时自动释放
-    std::unique_ptr<MainWindow>      main_window_;
 
     QString server_host_;
     quint16 server_port_ = 0;
     bool server_config_loaded_ = false;
     QString current_username_;
 
-    // 网络层（第七章）
-    cloudvault::TcpClient      tcp_client_;
-    cloudvault::ResponseRouter  router_;
-
-    // 认证服务（第八章）
-    cloudvault::AuthService    auth_service_;
-    cloudvault::ChatService    chat_service_;
-    cloudvault::FriendService  friend_service_;
-    cloudvault::FileService    file_service_;
-    cloudvault::ShareService   share_service_;
+    cloudvault::TcpClient& tcp_client_;
+    cloudvault::ResponseRouter& router_;
+    cloudvault::AuthService& auth_service_;
 };

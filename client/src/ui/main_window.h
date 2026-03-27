@@ -5,10 +5,10 @@
 
 #pragma once
 
-#include "network/chat_service.h"
-#include "network/friend_service.h"
-#include "network/file_service.h"
-#include "network/share_service.h"
+#include "service/chat_service.h"
+#include "service/friend_service.h"
+#include "service/file_service.h"
+#include "service/share_service.h"
 
 #include <QDateTime>
 #include <QHash>
@@ -25,6 +25,7 @@ class QListWidget;
 class QListWidgetItem;
 class QProgressBar;
 class QPushButton;
+class QToolButton;
 class QFrame;
 class QSplitter;
 class QTextEdit;
@@ -42,6 +43,9 @@ public:
                cloudvault::ShareService& share_service,
                QWidget* parent = nullptr);
     ~MainWindow() override;
+    void appendEventLog(const QString& message, const QString& icon = QStringLiteral("●"));
+    void showConnectionBanner(const QString& message);
+    void hideConnectionBanner();
 
 signals:
     void windowClosed();
@@ -95,6 +99,7 @@ private:
     void clearFileSearchIfNeeded(const QString& text);
     void switchMainTab(int index);
     void openOnlineUserDialog();
+    void openGroupListDialog();
     void openShareFileDialog();
     void uploadFile();
     void downloadSelectedFile();
@@ -122,12 +127,19 @@ private:
     QString current_file_path_ = QStringLiteral("/");
     QString current_file_query_;
     bool file_search_mode_ = false;
+    QString active_group_name_;
 
     QWidget* content_root_ = nullptr;
     QSplitter* content_splitter_ = nullptr;
     QFrame* sidebar_panel_ = nullptr;
     QWidget* detail_panel_ = nullptr;
     QVBoxLayout* content_layout_ = nullptr;
+    QFrame* connection_banner_ = nullptr;
+    QLabel* connection_banner_label_ = nullptr;
+    QFrame* event_log_panel_ = nullptr;
+    QListWidget* event_log_list_ = nullptr;
+    QToolButton* event_log_toggle_btn_ = nullptr;
+    bool event_log_expanded_ = true;
 
     QLabel* sidebar_title_label_ = nullptr;
     QLineEdit* contact_search_edit_ = nullptr;
@@ -141,9 +153,12 @@ private:
     QStackedWidget* center_stack_ = nullptr;
     QStackedWidget* chat_stack_ = nullptr;
 
+    QPushButton* group_list_btn_ = nullptr;
     QLabel* chat_avatar_label_ = nullptr;
     QLabel* chat_title_label_ = nullptr;
     QLabel* chat_status_label_ = nullptr;
+    QLabel* group_chat_title_label_ = nullptr;
+    QLabel* group_chat_status_label_ = nullptr;
     QListWidget* message_list_ = nullptr;
     QLabel* file_path_label_ = nullptr;
     QLabel* file_status_label_ = nullptr;

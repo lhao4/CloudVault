@@ -153,7 +153,7 @@ void OnlineUserDialog::setupUi() {
 
     footer_layout->addStretch();
 
-    add_btn_ = new QPushButton(QStringLiteral("添加好友"), footer);
+    add_btn_ = new QPushButton(QStringLiteral("+ 添加好友"), footer);
     add_btn_->setObjectName(QStringLiteral("dialogPrimaryBtn"));
     add_btn_->setEnabled(false);
     footer_layout->addWidget(add_btn_);

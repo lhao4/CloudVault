@@ -117,7 +117,9 @@ void ShareFileDialog::setupUi() {
     header_layout->setContentsMargins(16, 0, 12, 0);
     header_layout->setSpacing(8);
 
-    auto* title = new QLabel(QStringLiteral("分享文件"), header);
+    auto* title = new QLabel(
+        QStringLiteral("分享「%1」给好友").arg(QFileInfo(file_name_).fileName()),
+        header);
     title->setObjectName(QStringLiteral("dialogTitle"));
     header_layout->addWidget(title);
     header_layout->addStretch();
@@ -135,7 +137,7 @@ void ShareFileDialog::setupUi() {
     content_layout->setSpacing(12);
 
     file_hint_label_ = new QLabel(
-        QStringLiteral("当前文件：%1").arg(QFileInfo(file_name_).fileName()), content);
+        QStringLiteral("选择接收者后，文件会以分享通知的形式发送。"), content);
     file_hint_label_->setObjectName(QStringLiteral("dialogMetaCard"));
     content_layout->addWidget(file_hint_label_);
 
@@ -261,9 +263,9 @@ void ShareFileDialog::populateList(const QString& keyword) {
 void ShareFileDialog::updateConfirmButton() {
     const QStringList targets = selectedTargets();
     if (targets.isEmpty()) {
-        confirm_btn_->setText(QStringLiteral("选择接收好友"));
+        confirm_btn_->setText(QStringLiteral("确认分享"));
     } else {
-        confirm_btn_->setText(QStringLiteral("分享给 %1 位好友").arg(targets.size()));
+        confirm_btn_->setText(QStringLiteral("确认分享 (%1)").arg(targets.size()));
     }
     confirm_btn_->setEnabled(!targets.isEmpty());
     clear_btn_->setEnabled(friend_list_->count() > 0);
