@@ -290,13 +290,11 @@ void MainWindow::setupUi() {
 
     {
         chat_panel_widget_ = new ChatPanel(current_username_, center_stack_);
-        message_list_ = chat_panel_widget_->messageList();
         center_stack_->addWidget(chat_panel_widget_);
     }
 
     {
         file_panel_widget_ = new FilePanel(center_stack_);
-        file_list_ = file_panel_widget_->fileList();
         center_stack_->addWidget(file_panel_widget_);
     }
 
@@ -1133,16 +1131,16 @@ void MainWindow::refreshFileList(const QString& path,
             file_search_mode_
                 ? QStringLiteral("没有匹配的文件\n修改关键词后回车重新搜索")
                 : QStringLiteral("当前目录为空\n点击“+ 新建”或使用“上传”开始管理文件"),
-            file_list_->count() == 0);
+            file_panel_widget_->itemCount() == 0);
     }
 
-    if (file_list_->count() > 0) {
+    if (file_panel_widget_ && file_panel_widget_->itemCount() > 0) {
         if (file_panel_widget_) {
             file_panel_widget_->selectFirstEntry();
         }
         setFileStatus(file_search_mode_
-                          ? QStringLiteral("搜索完成，共找到 %1 项。").arg(file_list_->count())
-                          : QStringLiteral("目录已刷新，共 %1 项。").arg(file_list_->count()));
+                          ? QStringLiteral("搜索完成，共找到 %1 项。").arg(file_panel_widget_->itemCount())
+                          : QStringLiteral("目录已刷新，共 %1 项。").arg(file_panel_widget_->itemCount()));
     } else {
         resetFileActionSummary();
         setFileStatus(file_search_mode_
@@ -1158,7 +1156,7 @@ void MainWindow::updateFileSelectionState() {
         file_panel_widget_->refreshSelectionHighlights();
     }
 
-    const bool has_selection = file_list_->currentItem() != nullptr;
+    const bool has_selection = file_panel_widget_ && file_panel_widget_->hasSelection();
     const bool is_file = has_selection && !selectedFileIsDir();
     if (file_panel_widget_) {
         file_panel_widget_->setActionButtonsEnabled(has_selection, is_file);
@@ -1175,7 +1173,7 @@ void MainWindow::applySelectedFile() {
     }
 
     const bool is_dir = selectedFileIsDir();
-    const QString name = file_list_->currentItem()->data(Qt::UserRole + 2).toString();
+    const QString name = file_panel_widget_ ? file_panel_widget_->currentName() : QString();
     if (file_panel_widget_) {
         file_panel_widget_->setSelectionSummary(
             name,

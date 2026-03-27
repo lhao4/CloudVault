@@ -151,8 +151,6 @@ private:
     FilePanel* file_panel_widget_ = nullptr;
     DetailPanel* detail_panel_widget_ = nullptr;
 
-    QListWidget* message_list_ = nullptr;
-    QListWidget* file_list_ = nullptr;
     QLabel* profile_name_label_ = nullptr;
     QLabel* profile_id_label_ = nullptr;
     QLineEdit* profile_nickname_edit_ = nullptr;

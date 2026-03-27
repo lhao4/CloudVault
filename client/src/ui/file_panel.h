@@ -37,6 +37,7 @@ public:
     QString searchText() const;
     void clearSearch();
     void focusSearchSelectAll();
+    int itemCount() const;
     bool hasSelection() const;
     QString currentPath() const;
     QString currentName() const;

@@ -447,6 +447,10 @@ void FilePanel::focusSearchSelectAll() {
     }
 }
 
+int FilePanel::itemCount() const {
+    return file_list_ ? file_list_->count() : 0;
+}
+
 bool FilePanel::hasSelection() const {
     return file_list_ && file_list_->currentItem();
 }
