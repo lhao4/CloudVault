@@ -23,7 +23,6 @@ class QLabel;
 class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
-class QProgressBar;
 class QPushButton;
 class QToolButton;
 class QFrame;
@@ -68,9 +67,6 @@ private:
 
     void setupUi();
     void connectSignals();
-    void appendChatMessage(const cloudvault::ChatMessage& message);
-    void appendDateDividerIfNeeded(const QString& timestamp);
-    void rebuildMessageList(const QList<cloudvault::ChatMessage>& messages);
     void showChatEmptyState();
     void showChatConversation(const QString& username, bool online);
     void requestConversationSnapshot(const QString& peer);
@@ -157,17 +153,10 @@ private:
     ChatPanel* chat_panel_widget_ = nullptr;
     FilePanel* file_panel_widget_ = nullptr;
     DetailPanel* detail_panel_widget_ = nullptr;
-    QStackedWidget* chat_stack_ = nullptr;
 
     QPushButton* group_list_btn_ = nullptr;
-    QLabel* chat_avatar_label_ = nullptr;
-    QLabel* chat_title_label_ = nullptr;
-    QLabel* chat_status_label_ = nullptr;
-    QLabel* group_chat_title_label_ = nullptr;
-    QLabel* group_chat_status_label_ = nullptr;
     QListWidget* message_list_ = nullptr;
     QLabel* file_path_label_ = nullptr;
-    QLabel* file_status_label_ = nullptr;
     QLineEdit* file_search_edit_ = nullptr;
     QListWidget* file_list_ = nullptr;
     QLabel* file_empty_state_label_ = nullptr;
@@ -175,10 +164,6 @@ private:
     QPushButton* file_upload_btn_ = nullptr;
     QPushButton* file_refresh_btn_ = nullptr;
     QPushButton* file_create_btn_ = nullptr;
-    QFrame* file_transfer_row_ = nullptr;
-    QLabel* file_transfer_label_ = nullptr;
-    QLabel* file_transfer_percent_label_ = nullptr;
-    QProgressBar* file_transfer_bar_ = nullptr;
     QPushButton* file_transfer_cancel_btn_ = nullptr;
     QLabel* profile_name_label_ = nullptr;
     QLabel* profile_id_label_ = nullptr;
@@ -192,13 +177,5 @@ private:
     QPushButton* file_rename_btn_ = nullptr;
     QPushButton* file_move_btn_ = nullptr;
     QPushButton* file_delete_btn_ = nullptr;
-
-    QLabel* detail_contact_avatar_label_ = nullptr;
-    QLabel* detail_contact_name_label_ = nullptr;
-    QLabel* detail_contact_status_label_ = nullptr;
-    QVBoxLayout* detail_shared_files_layout_ = nullptr;
-    QLabel* detail_shared_empty_label_ = nullptr;
-    QLabel* detail_file_target_label_ = nullptr;
-    QLabel* detail_file_meta_label_ = nullptr;
     QStringList pending_upload_paths_;
 };

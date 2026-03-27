@@ -6,18 +6,81 @@
 #include "chat_panel.h"
 
 #include <QAbstractItemView>
+#include <QDate>
+#include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QListWidget>
+#include <QListWidgetItem>
+#include <QPainter>
+#include <QPainterPath>
 #include <QPushButton>
+#include <QStyledItemDelegate>
 #include <QStackedWidget>
 #include <QStyle>
+#include <QStyleOptionViewItem>
 #include <QTextEdit>
 #include <QVBoxLayout>
 
 namespace {
+
+constexpr int kMessageKindRole = Qt::UserRole + 40;
+constexpr int kMessageContentRole = Qt::UserRole + 41;
+constexpr int kMessageTimestampRole = Qt::UserRole + 42;
+constexpr int kMessageOutgoingRole = Qt::UserRole + 43;
+constexpr int kMessageAvatarSeedRole = Qt::UserRole + 44;
+constexpr int kMessageDateRole = Qt::UserRole + 45;
+
+QString defaultEmptyStatus() {
+    return QStringLiteral("请选择联系人开始聊天");
+}
+
+QDateTime parseConversationTimestamp(const QString& timestamp) {
+    static const QStringList text_formats = {
+        QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"),
+        QStringLiteral("yyyy-MM-dd HH:mm:ss"),
+    };
+
+    for (const auto& format : text_formats) {
+        const QDateTime dt = QDateTime::fromString(timestamp, format);
+        if (dt.isValid()) {
+            return dt;
+        }
+    }
+    for (const auto format : {Qt::ISODateWithMs, Qt::ISODate}) {
+        const QDateTime dt = QDateTime::fromString(timestamp, format);
+        if (dt.isValid()) {
+            return dt;
+        }
+    }
+    return {};
+}
+
+QString conversationDateKey(const QString& timestamp) {
+    const QDateTime dt = parseConversationTimestamp(timestamp);
+    if (!dt.isValid()) {
+        return QStringLiteral("unknown");
+    }
+    return dt.date().toString(QStringLiteral("yyyy-MM-dd"));
+}
+
+QString formatConversationTime(const QString& timestamp) {
+    const QDateTime dt = parseConversationTimestamp(timestamp);
+    if (!dt.isValid()) {
+        return QStringLiteral("--:--");
+    }
+    return dt.time().toString(QStringLiteral("HH:mm"));
+}
+
+QString formatDividerDate(const QString& key) {
+    const QDate date = QDate::fromString(key, QStringLiteral("yyyy-MM-dd"));
+    if (!date.isValid()) {
+        return key;
+    }
+    return date.toString(QStringLiteral("yyyy-MM-dd"));
+}
 
 int avatarVariantForSeed(const QString& seed) {
     return static_cast<int>(qHash(seed)) % 6;
@@ -78,6 +141,207 @@ QPushButton* createIconButton(const QString& text,
     button->setToolTip(tooltip);
     return button;
 }
+
+QPainterPath bubblePath(const QRectF& rect, bool outgoing) {
+    const qreal radius = 16.0;
+    const qreal tail = 4.0;
+
+    QPainterPath path;
+    path.moveTo(rect.left() + radius, rect.top());
+    path.lineTo(rect.right() - radius, rect.top());
+    path.quadTo(rect.right(), rect.top(), rect.right(), rect.top() + radius);
+
+    if (outgoing) {
+        path.lineTo(rect.right(), rect.bottom() - tail);
+        path.quadTo(rect.right(), rect.bottom(), rect.right() - tail, rect.bottom());
+        path.lineTo(rect.left() + radius, rect.bottom());
+        path.quadTo(rect.left(), rect.bottom(), rect.left(), rect.bottom() - radius);
+    } else {
+        path.lineTo(rect.right(), rect.bottom() - radius);
+        path.quadTo(rect.right(), rect.bottom(), rect.right() - radius, rect.bottom());
+        path.lineTo(rect.left() + tail, rect.bottom());
+        path.quadTo(rect.left(), rect.bottom(), rect.left(), rect.bottom() - tail);
+    }
+
+    path.lineTo(rect.left(), rect.top() + radius);
+    path.quadTo(rect.left(), rect.top(), rect.left() + radius, rect.top());
+    path.closeSubpath();
+    return path;
+}
+
+class MessageBubbleDelegate final : public QStyledItemDelegate {
+public:
+    explicit MessageBubbleDelegate(QObject* parent = nullptr)
+        : QStyledItemDelegate(parent) {}
+
+    QSize sizeHint(const QStyleOptionViewItem& option,
+                   const QModelIndex& index) const override {
+        const QString kind = index.data(kMessageKindRole).toString();
+        if (kind == QStringLiteral("divider")) {
+            return QSize(option.rect.width(), 28);
+        }
+
+        QFont bubble_font = option.font;
+        bubble_font.setPixelSize(13);
+        QFontMetrics bubble_metrics(bubble_font);
+        const QString text = index.data(kMessageContentRole).toString();
+        const QRect text_rect = bubble_metrics.boundingRect(
+            QRect(0, 0, 328, 10000),
+            Qt::TextWordWrap | Qt::AlignLeft,
+            text);
+        const int bubble_height = text_rect.height() + 22;
+        const int content_height = std::max(28, bubble_height);
+        return QSize(option.rect.width(), content_height + 14);
+    }
+
+    void paint(QPainter* painter,
+               const QStyleOptionViewItem& option,
+               const QModelIndex& index) const override {
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setRenderHint(QPainter::TextAntialiasing, true);
+
+        const QRect rect = option.rect.adjusted(0, 2, 0, -2);
+        const QString kind = index.data(kMessageKindRole).toString();
+        if (kind == QStringLiteral("divider")) {
+            drawDivider(painter, rect, index.data(kMessageDateRole).toString(), option);
+            painter->restore();
+            return;
+        }
+
+        const bool outgoing = index.data(kMessageOutgoingRole).toBool();
+        const QString text = index.data(kMessageContentRole).toString();
+        const QString time = formatConversationTime(index.data(kMessageTimestampRole).toString());
+        const QString seed = index.data(kMessageAvatarSeedRole).toString();
+
+        QFont bubble_font = option.font;
+        bubble_font.setPixelSize(13);
+        bubble_font.setWeight(QFont::Medium);
+        QFontMetrics bubble_metrics(bubble_font);
+
+        QFont time_font = option.font;
+        time_font.setPixelSize(10);
+        QFontMetrics time_metrics(time_font);
+
+        const QRect text_rect = bubble_metrics.boundingRect(
+            QRect(0, 0, 328, 10000),
+            Qt::TextWordWrap | Qt::AlignLeft,
+            text);
+
+        const int bubble_width = std::min(360, text_rect.width() + 28);
+        const int bubble_height = text_rect.height() + 22;
+        const int avatar_size = 28;
+        const int side_margin = 14;
+        const int avatar_gap = 8;
+        const int time_gap = 10;
+        const int time_width = time_metrics.horizontalAdvance(time);
+        const int time_height = time_metrics.height();
+        const int top = rect.top() + 6;
+
+        QRect bubble_rect;
+        QRect avatar_rect;
+        QRect time_rect;
+
+        if (outgoing) {
+            const int bubble_right = rect.right() - side_margin;
+            bubble_rect = QRect(bubble_right - bubble_width + 1, top, bubble_width, bubble_height);
+            time_rect = QRect(bubble_rect.left() - time_gap - time_width,
+                              bubble_rect.bottom() - time_height,
+                              time_width,
+                              time_height);
+        } else {
+            avatar_rect = QRect(rect.left() + side_margin,
+                                top + std::max(0, bubble_height - avatar_size),
+                                avatar_size,
+                                avatar_size);
+            bubble_rect = QRect(avatar_rect.right() + avatar_gap,
+                                top,
+                                bubble_width,
+                                bubble_height);
+            time_rect = QRect(bubble_rect.right() + time_gap,
+                              bubble_rect.bottom() - time_height,
+                              time_width,
+                              time_height);
+        }
+
+        if (!outgoing) {
+            drawAvatar(painter, avatar_rect, seed);
+        }
+
+        const QColor bubble_color = outgoing ? QColor(QStringLiteral("#3B82F6"))
+                                             : QColor(QStringLiteral("#FFFFFF"));
+        const QColor border_color = outgoing ? QColor(QStringLiteral("#3B82F6"))
+                                             : QColor(QStringLiteral("#E2E6EA"));
+        const QColor text_color = outgoing ? QColor(Qt::white)
+                                           : QColor(QStringLiteral("#111827"));
+
+        painter->setPen(QPen(border_color, outgoing ? 0.0 : 1.0));
+        painter->setBrush(bubble_color);
+        painter->drawPath(bubblePath(QRectF(bubble_rect), outgoing));
+
+        painter->setFont(bubble_font);
+        painter->setPen(text_color);
+        painter->drawText(bubble_rect.adjusted(14, 11, -14, -11),
+                          Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignVCenter,
+                          text);
+
+        painter->setFont(time_font);
+        painter->setPen(QColor(QStringLiteral("#9CA3AF")));
+        painter->drawText(time_rect, Qt::AlignVCenter | Qt::AlignLeft, time);
+
+        painter->restore();
+    }
+
+private:
+    static void drawDivider(QPainter* painter,
+                            const QRect& rect,
+                            const QString& label,
+                            const QStyleOptionViewItem& option) {
+        QFont font = option.font;
+        font.setPixelSize(12);
+        painter->setFont(font);
+        painter->setPen(QColor(QStringLiteral("#9CA3AF")));
+
+        const QString text = formatDividerDate(label);
+        const QFontMetrics metrics(font);
+        const int text_width = metrics.horizontalAdvance(text) + 20;
+        const int center_y = rect.center().y();
+        const int text_left = rect.center().x() - text_width / 2;
+        const int text_right = rect.center().x() + text_width / 2;
+
+        painter->setPen(QPen(QColor(QStringLiteral("#D1D5DB")), 1.0));
+        painter->drawLine(rect.left() + 20, center_y, text_left, center_y);
+        painter->drawLine(text_right, center_y, rect.right() - 20, center_y);
+
+        painter->setPen(QColor(QStringLiteral("#9CA3AF")));
+        painter->drawText(QRect(text_left, rect.top(), text_width, rect.height()),
+                          Qt::AlignCenter,
+                          text);
+    }
+
+    static void drawAvatar(QPainter* painter, const QRect& rect, const QString& seed) {
+        static const QColor backgrounds[] = {
+            QColor(QStringLiteral("#3B82F6")),
+            QColor(QStringLiteral("#2563EB")),
+            QColor(QStringLiteral("#22C55E")),
+            QColor(QStringLiteral("#6B7280")),
+            QColor(QStringLiteral("#9CA3AF")),
+            QColor(QStringLiteral("#111827")),
+        };
+
+        const QColor background = backgrounds[avatarVariantForSeed(seed)];
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(background);
+        painter->drawEllipse(rect);
+
+        QFont font = painter->font();
+        font.setPixelSize(12);
+        font.setBold(true);
+        painter->setFont(font);
+        painter->setPen(Qt::white);
+        painter->drawText(rect, Qt::AlignCenter, seed.left(1).toUpper());
+    }
+};
 
 class SendTextEdit final : public QTextEdit {
     Q_OBJECT
@@ -184,6 +448,7 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
     message_list_->setSelectionMode(QAbstractItemView::NoSelection);
     message_list_->setFocusPolicy(Qt::NoFocus);
     message_list_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    message_list_->setItemDelegate(new MessageBubbleDelegate(message_list_));
     conversation_layout->addWidget(message_list_, 1);
 
     auto* compose_bar = new QFrame(conversation_page);
@@ -272,6 +537,102 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
     group_layout->addWidget(group_empty, 1);
 
     stack_->addWidget(group_page);
+}
+
+void ChatPanel::showEmptyState() {
+    if (stack_) {
+        stack_->setCurrentIndex(0);
+    }
+    if (title_label_) {
+        title_label_->setText(QStringLiteral("CloudVault"));
+    }
+    if (status_label_) {
+        status_label_->setText(defaultEmptyStatus());
+    }
+    if (message_list_) {
+        message_list_->clear();
+    }
+}
+
+void ChatPanel::showConversationHeader(const QString& username, const QString& presence) {
+    if (stack_) {
+        stack_->setCurrentIndex(1);
+    }
+    if (title_label_) {
+        title_label_->setText(username);
+    }
+    if (status_label_) {
+        status_label_->setText(presence);
+    }
+    prepareAvatarBadge(avatar_label_, username, 34);
+}
+
+void ChatPanel::setConversationStatus(const QString& status) {
+    if (status_label_) {
+        status_label_->setText(status);
+    }
+}
+
+void ChatPanel::showGroupPlaceholder(const QString& group_name) {
+    if (stack_) {
+        stack_->setCurrentIndex(2);
+    }
+    if (group_title_label_) {
+        group_title_label_->setText(group_name);
+    }
+}
+
+void ChatPanel::appendMessage(const cloudvault::ChatMessage& message,
+                              const QString& current_username) {
+    appendDateDividerIfNeeded(message.timestamp);
+
+    auto* item = new QListWidgetItem(message_list_);
+    item->setData(kMessageKindRole, QStringLiteral("message"));
+    item->setData(kMessageContentRole, message.content);
+    item->setData(kMessageTimestampRole, message.timestamp);
+    item->setData(kMessageOutgoingRole, message.from == current_username);
+    item->setData(kMessageAvatarSeedRole,
+                  (message.from == current_username) ? current_username : message.from);
+    message_list_->scrollToBottom();
+}
+
+void ChatPanel::rebuildMessages(const QList<cloudvault::ChatMessage>& messages,
+                                const QString& current_username) {
+    if (!message_list_) {
+        return;
+    }
+    message_list_->clear();
+    for (const auto& message : messages) {
+        appendMessage(message, current_username);
+    }
+    message_list_->scrollToBottom();
+}
+
+void ChatPanel::appendDateDividerIfNeeded(const QString& timestamp) {
+    if (!message_list_) {
+        return;
+    }
+
+    const QString current_date = conversationDateKey(timestamp);
+    if (message_list_->count() > 0) {
+        if (auto* last_item = message_list_->item(message_list_->count() - 1)) {
+            if (last_item->data(kMessageKindRole).toString() == QStringLiteral("message")) {
+                const QString last_date = conversationDateKey(
+                    last_item->data(kMessageTimestampRole).toString());
+                if (last_date == current_date) {
+                    return;
+                }
+            } else if (last_item->data(kMessageKindRole).toString() == QStringLiteral("divider") &&
+                       last_item->data(kMessageDateRole).toString() == current_date) {
+                return;
+            }
+        }
+    }
+
+    auto* divider = new QListWidgetItem(message_list_);
+    divider->setData(kMessageKindRole, QStringLiteral("divider"));
+    divider->setData(kMessageDateRole, current_date);
+    divider->setFlags(Qt::NoItemFlags);
 }
 
 QStackedWidget* ChatPanel::stack() const { return stack_; }

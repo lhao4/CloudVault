@@ -13,7 +13,127 @@
 #include <QListWidget>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QStyle>
 #include <QVBoxLayout>
+
+#include <algorithm>
+
+namespace {
+
+void repolish(QWidget* widget) {
+    if (!widget) {
+        return;
+    }
+    widget->style()->unpolish(widget);
+    widget->style()->polish(widget);
+    widget->update();
+}
+
+void allowViewToHandleMouseEvents(QWidget* widget) {
+    if (!widget) {
+        return;
+    }
+    widget->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    const auto children = widget->findChildren<QWidget*>();
+    for (QWidget* child : children) {
+        child->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    }
+}
+
+QString formatFileSize(quint64 size) {
+    static const char* units[] = {"B", "KB", "MB", "GB"};
+    double value = static_cast<double>(size);
+    int unit_index = 0;
+    while (value >= 1024.0 && unit_index < 3) {
+        value /= 1024.0;
+        ++unit_index;
+    }
+    if (unit_index == 0) {
+        return QStringLiteral("%1 %2").arg(static_cast<qulonglong>(size)).arg(units[unit_index]);
+    }
+    return QStringLiteral("%1 %2")
+        .arg(QString::number(value, 'f', value >= 10.0 ? 1 : 2))
+        .arg(units[unit_index]);
+}
+
+QLabel* createStandardIconLabel(QStyle::StandardPixmap icon_type,
+                                int size,
+                                const QString& object_name,
+                                QWidget* parent = nullptr) {
+    auto* label = new QLabel(parent);
+    label->setObjectName(object_name);
+    label->setFixedSize(size, size);
+    label->setAlignment(Qt::AlignCenter);
+    if (parent) {
+        label->setPixmap(parent->style()->standardIcon(icon_type).pixmap(size, size));
+    }
+    return label;
+}
+
+QWidget* createFileItemWidget(const cloudvault::FileEntry& entry,
+                              bool selected,
+                              QWidget* parent = nullptr) {
+    auto* frame = new QFrame(parent);
+    frame->setObjectName(QStringLiteral("fileRowCard"));
+    frame->setProperty("selected", selected);
+
+    auto* layout = new QHBoxLayout(frame);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    auto* accent = new QFrame(frame);
+    accent->setObjectName(QStringLiteral("fileRowAccent"));
+    accent->setProperty("selected", selected);
+    accent->setFixedWidth(2);
+    layout->addWidget(accent);
+
+    auto* body = new QWidget(frame);
+    body->setMinimumHeight(44);
+    auto* row = new QHBoxLayout(body);
+    row->setContentsMargins(12, 0, 12, 0);
+    row->setSpacing(12);
+
+    auto* icon = createStandardIconLabel(entry.is_dir ? QStyle::SP_DirIcon
+                                                      : QStyle::SP_FileIcon,
+                                         20,
+                                         QStringLiteral("fileIconLabel"),
+                                         body);
+    row->addWidget(icon);
+
+    auto* name_label = new QLabel(entry.name, body);
+    name_label->setObjectName(QStringLiteral("fileNameLabel"));
+    name_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    row->addWidget(name_label, 1);
+
+    auto* size_label = new QLabel(entry.is_dir ? QStringLiteral("—")
+                                               : formatFileSize(entry.size),
+                                  body);
+    size_label->setObjectName(QStringLiteral("fileCellLabel"));
+    size_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    size_label->setFixedWidth(120);
+    row->addWidget(size_label);
+
+    auto* time_label = new QLabel(entry.modified_at, body);
+    time_label->setObjectName(QStringLiteral("fileCellLabel"));
+    time_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    time_label->setFixedWidth(140);
+    row->addWidget(time_label);
+
+    auto* type_label = new QLabel(entry.is_dir ? QStringLiteral("文件夹")
+                                               : QStringLiteral("文件"),
+                                  body);
+    type_label->setObjectName(QStringLiteral("fileTypeLabel"));
+    type_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    type_label->setFixedWidth(80);
+    row->addWidget(type_label);
+
+    layout->addWidget(body, 1);
+    frame->setToolTip(entry.path);
+    allowViewToHandleMouseEvents(frame);
+    return frame;
+}
+
+} // namespace
 
 FilePanel::FilePanel(QWidget* parent)
     : QWidget(parent) {
@@ -173,6 +293,124 @@ FilePanel::FilePanel(QWidget* parent)
     delete_btn_->setObjectName(QStringLiteral("deleteBtn"));
     footer_layout->addWidget(delete_btn_);
     page_layout->addWidget(footer);
+}
+
+void FilePanel::setStatusMessage(const QString& message, bool error) {
+    if (!status_label_) {
+        return;
+    }
+    status_label_->setProperty("error", error);
+    status_label_->setText(message);
+    repolish(status_label_);
+}
+
+void FilePanel::resetSelectionSummary() {
+    setSelectionSummary(QStringLiteral("未选择文件"),
+                        QStringLiteral("未选择文件"));
+}
+
+void FilePanel::setSelectionSummary(const QString& name,
+                                    const QString& meta,
+                                    const QString& tooltip) {
+    if (selection_label_) {
+        selection_label_->setText(QStringLiteral("选中：%1").arg(name));
+    }
+    if (meta_label_) {
+        meta_label_->setText(meta);
+        meta_label_->setToolTip(tooltip);
+    }
+}
+
+void FilePanel::setTransferState(const QString& title, int percent, bool cancellable) {
+    if (!transfer_row_) {
+        return;
+    }
+    const int clamped = std::clamp(percent, 0, 100);
+    transfer_row_->show();
+    if (transfer_label_) {
+        transfer_label_->setText(title);
+    }
+    if (transfer_bar_) {
+        transfer_bar_->setValue(clamped);
+    }
+    if (transfer_percent_label_) {
+        transfer_percent_label_->setText(QStringLiteral("%1%").arg(clamped));
+    }
+    if (transfer_cancel_btn_) {
+        transfer_cancel_btn_->setEnabled(cancellable);
+    }
+}
+
+void FilePanel::clearTransferState() {
+    if (transfer_row_) {
+        transfer_row_->hide();
+    }
+    if (transfer_bar_) {
+        transfer_bar_->setValue(0);
+    }
+    if (transfer_percent_label_) {
+        transfer_percent_label_->setText(QStringLiteral("0%"));
+    }
+}
+
+void FilePanel::populateEntries(const cloudvault::FileEntries& entries) {
+    if (!file_list_) {
+        return;
+    }
+    file_list_->clear();
+    for (const auto& entry : entries) {
+        auto* item = new QListWidgetItem(file_list_);
+        item->setSizeHint(QSize(0, 44));
+        item->setData(Qt::UserRole, entry.path);
+        item->setData(Qt::UserRole + 1, entry.is_dir);
+        item->setData(Qt::UserRole + 2, entry.name);
+        file_list_->setItemWidget(item, createFileItemWidget(entry, false, file_list_));
+    }
+}
+
+void FilePanel::setPathState(const QString& text, const QString& tooltip, bool can_go_back) {
+    if (path_label_) {
+        path_label_->setText(text);
+        path_label_->setToolTip(tooltip);
+    }
+    if (back_btn_) {
+        back_btn_->setEnabled(can_go_back);
+    }
+}
+
+void FilePanel::setEmptyState(const QString& text, bool empty) {
+    if (empty_state_label_) {
+        empty_state_label_->setText(text);
+        empty_state_label_->setVisible(empty);
+    }
+    if (file_list_) {
+        file_list_->setVisible(!empty);
+    }
+}
+
+void FilePanel::selectFirstEntry() {
+    if (file_list_ && file_list_->count() > 0) {
+        file_list_->setCurrentRow(0);
+    }
+}
+
+void FilePanel::refreshSelectionHighlights() {
+    if (!file_list_) {
+        return;
+    }
+    for (int i = 0; i < file_list_->count(); ++i) {
+        auto* item = file_list_->item(i);
+        auto* widget = file_list_->itemWidget(item);
+        if (!widget) {
+            continue;
+        }
+        widget->setProperty("selected", item->isSelected());
+        if (auto* accent = widget->findChild<QFrame*>(QStringLiteral("fileRowAccent"))) {
+            accent->setProperty("selected", item->isSelected());
+            repolish(accent);
+        }
+        repolish(widget);
+    }
 }
 
 QLabel* FilePanel::pathLabel() const { return path_label_; }

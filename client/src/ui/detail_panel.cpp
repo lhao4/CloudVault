@@ -13,6 +13,10 @@
 
 namespace {
 
+QString formatPresence(bool online) {
+    return online ? QStringLiteral("在线") : QStringLiteral("离线");
+}
+
 int avatarVariantForSeed(const QString& seed) {
     return static_cast<int>(qHash(seed)) % 6;
 }
@@ -37,6 +41,53 @@ void prepareAvatarBadge(QLabel* label, const QString& seed, int size) {
     label->setText(seed.left(1).toUpper());
     label->setStyleSheet(QStringLiteral("border-radius:%1px;").arg(size / 2));
     repolish(label);
+}
+
+QLabel* createStandardIconLabel(QStyle::StandardPixmap icon_type,
+                                int size,
+                                const QString& object_name,
+                                QWidget* parent = nullptr) {
+    auto* label = new QLabel(parent);
+    label->setObjectName(object_name);
+    label->setFixedSize(size, size);
+    label->setAlignment(Qt::AlignCenter);
+    if (parent) {
+        label->setPixmap(parent->style()->standardIcon(icon_type).pixmap(size, size));
+    }
+    return label;
+}
+
+QWidget* createDetailFileRow(const QString& title,
+                             const QString& meta,
+                             QWidget* parent = nullptr) {
+    auto* row = new QFrame(parent);
+    row->setObjectName(QStringLiteral("detailFileRow"));
+    auto* layout = new QHBoxLayout(row);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(10);
+
+    auto* icon_wrap = createStandardIconLabel(QStyle::SP_FileIcon,
+                                              18,
+                                              QStringLiteral("detailFileIcon"),
+                                              row);
+    icon_wrap->setFixedSize(28, 28);
+    layout->addWidget(icon_wrap, 0, Qt::AlignTop);
+
+    auto* text_layout = new QVBoxLayout();
+    text_layout->setContentsMargins(0, 0, 0, 0);
+    text_layout->setSpacing(1);
+
+    auto* name_label = new QLabel(title, row);
+    name_label->setObjectName(QStringLiteral("detailFileName"));
+    text_layout->addWidget(name_label);
+
+    auto* meta_label = new QLabel(meta, row);
+    meta_label->setObjectName(QStringLiteral("detailFileMeta"));
+    meta_label->setWordWrap(true);
+    text_layout->addWidget(meta_label);
+
+    layout->addLayout(text_layout, 1);
+    return row;
 }
 
 } // namespace
@@ -118,6 +169,54 @@ DetailPanel::DetailPanel(const QString& current_username, QWidget* parent)
     detail_body_layout->addWidget(files_section);
     detail_body_layout->addStretch();
     detail_layout->addWidget(detail_body, 1);
+}
+
+void DetailPanel::showEmptyState(const QString& current_username) {
+    if (contact_name_label_) {
+        contact_name_label_->setText(QStringLiteral("未选择联系人"));
+    }
+    if (contact_status_label_) {
+        contact_status_label_->setText(QStringLiteral("请选择左侧联系人"));
+    }
+    prepareAvatarBadge(contact_avatar_label_, current_username, 26);
+    showSharedEmptyMessage(QStringLiteral("选择联系人后可查看共享文件"));
+}
+
+void DetailPanel::showContact(const QString& username, bool online) {
+    if (contact_name_label_) {
+        contact_name_label_->setText(username);
+    }
+    if (contact_status_label_) {
+        contact_status_label_->setText(formatPresence(online));
+    }
+    prepareAvatarBadge(contact_avatar_label_, username, 26);
+}
+
+void DetailPanel::clearSharedFiles() {
+    while (shared_files_layout_ && shared_files_layout_->count() > 0) {
+        if (auto* item = shared_files_layout_->takeAt(0)) {
+            delete item->widget();
+            delete item;
+        }
+    }
+}
+
+void DetailPanel::addSharedSummary(const QString& title, const QString& meta) {
+    clearSharedFiles();
+    if (shared_empty_label_) {
+        shared_empty_label_->setVisible(false);
+    }
+    if (shared_files_layout_) {
+        shared_files_layout_->addWidget(createDetailFileRow(title, meta, this));
+    }
+}
+
+void DetailPanel::showSharedEmptyMessage(const QString& message) {
+    clearSharedFiles();
+    if (shared_empty_label_) {
+        shared_empty_label_->setText(message);
+        shared_empty_label_->setVisible(true);
+    }
 }
 
 QLabel* DetailPanel::contactAvatarLabel() const { return contact_avatar_label_; }

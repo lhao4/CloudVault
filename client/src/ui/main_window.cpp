@@ -50,13 +50,6 @@
 
 namespace {
 
-constexpr int kMessageKindRole = Qt::UserRole + 40;
-constexpr int kMessageContentRole = Qt::UserRole + 41;
-constexpr int kMessageTimestampRole = Qt::UserRole + 42;
-constexpr int kMessageOutgoingRole = Qt::UserRole + 43;
-constexpr int kMessageAvatarSeedRole = Qt::UserRole + 44;
-constexpr int kMessageDateRole = Qt::UserRole + 45;
-
 QString formatPresence(bool online) {
     return online ? QStringLiteral("在线") : QStringLiteral("离线");
 }
@@ -198,14 +191,6 @@ QDateTime parseConversationTimestamp(const QString& timestamp) {
     return dt;
 }
 
-QString dateKeyForTimestamp(const QString& timestamp) {
-    const QDateTime dt = parseConversationTimestamp(timestamp);
-    if (dt.isValid()) {
-        return dt.date().toString(QStringLiteral("yyyy-MM-dd"));
-    }
-    return timestamp.section(' ', 0, 0);
-}
-
 QString formatConversationTime(const QString& timestamp) {
     const QDateTime dt = parseConversationTimestamp(timestamp);
     if (!dt.isValid()) {
@@ -220,14 +205,6 @@ QString formatConversationTime(const QString& timestamp) {
         return dt.date().toString(QStringLiteral("MM-dd"));
     }
     return dt.date().toString(QStringLiteral("yyyy-MM-dd"));
-}
-
-QString formatDividerDate(const QString& key) {
-    const QDate date = QDate::fromString(key, QStringLiteral("yyyy-MM-dd"));
-    if (!date.isValid()) {
-        return key;
-    }
-    return date.toString(QStringLiteral("yyyy-MM-dd"));
 }
 
 QString formatFileSize(quint64 size) {
@@ -245,207 +222,6 @@ QString formatFileSize(quint64 size) {
         .arg(QString::number(value, 'f', value >= 10.0 ? 1 : 2))
         .arg(units[unit_index]);
 }
-
-QPainterPath bubblePath(const QRectF& rect, bool outgoing) {
-    const qreal radius = 16.0;
-    const qreal tail = 4.0;
-
-    QPainterPath path;
-    path.moveTo(rect.left() + radius, rect.top());
-    path.lineTo(rect.right() - radius, rect.top());
-    path.quadTo(rect.right(), rect.top(), rect.right(), rect.top() + radius);
-
-    if (outgoing) {
-        path.lineTo(rect.right(), rect.bottom() - tail);
-        path.quadTo(rect.right(), rect.bottom(), rect.right() - tail, rect.bottom());
-        path.lineTo(rect.left() + radius, rect.bottom());
-        path.quadTo(rect.left(), rect.bottom(), rect.left(), rect.bottom() - radius);
-    } else {
-        path.lineTo(rect.right(), rect.bottom() - radius);
-        path.quadTo(rect.right(), rect.bottom(), rect.right() - radius, rect.bottom());
-        path.lineTo(rect.left() + tail, rect.bottom());
-        path.quadTo(rect.left(), rect.bottom(), rect.left(), rect.bottom() - tail);
-    }
-
-    path.lineTo(rect.left(), rect.top() + radius);
-    path.quadTo(rect.left(), rect.top(), rect.left() + radius, rect.top());
-    path.closeSubpath();
-    return path;
-}
-
-class MessageBubbleDelegate final : public QStyledItemDelegate {
-public:
-    explicit MessageBubbleDelegate(QObject* parent = nullptr)
-        : QStyledItemDelegate(parent) {}
-
-    QSize sizeHint(const QStyleOptionViewItem& option,
-                   const QModelIndex& index) const override {
-        const QString kind = index.data(kMessageKindRole).toString();
-        if (kind == QStringLiteral("divider")) {
-            return QSize(option.rect.width(), 28);
-        }
-
-        QFont bubble_font = option.font;
-        bubble_font.setPixelSize(13);
-        QFontMetrics bubble_metrics(bubble_font);
-        const QString text = index.data(kMessageContentRole).toString();
-        const QRect text_rect = bubble_metrics.boundingRect(
-            QRect(0, 0, 328, 10000),
-            Qt::TextWordWrap | Qt::AlignLeft,
-            text);
-        const int bubble_height = text_rect.height() + 22;
-        const int content_height = std::max(28, bubble_height);
-        return QSize(option.rect.width(), content_height + 14);
-    }
-
-    void paint(QPainter* painter,
-               const QStyleOptionViewItem& option,
-               const QModelIndex& index) const override {
-        painter->save();
-        painter->setRenderHint(QPainter::Antialiasing, true);
-        painter->setRenderHint(QPainter::TextAntialiasing, true);
-
-        const QRect rect = option.rect.adjusted(0, 2, 0, -2);
-        const QString kind = index.data(kMessageKindRole).toString();
-        if (kind == QStringLiteral("divider")) {
-            drawDivider(painter, rect, index.data(kMessageDateRole).toString(), option);
-            painter->restore();
-            return;
-        }
-
-        const bool outgoing = index.data(kMessageOutgoingRole).toBool();
-        const QString text = index.data(kMessageContentRole).toString();
-        const QString time = formatConversationTime(index.data(kMessageTimestampRole).toString());
-        const QString seed = index.data(kMessageAvatarSeedRole).toString();
-
-        QFont bubble_font = option.font;
-        bubble_font.setPixelSize(13);
-        bubble_font.setWeight(QFont::Medium);
-        QFontMetrics bubble_metrics(bubble_font);
-
-        QFont time_font = option.font;
-        time_font.setPixelSize(10);
-        QFontMetrics time_metrics(time_font);
-
-        const QRect text_rect = bubble_metrics.boundingRect(
-            QRect(0, 0, 328, 10000),
-            Qt::TextWordWrap | Qt::AlignLeft,
-            text);
-
-        const int bubble_width = std::min(360, text_rect.width() + 28);
-        const int bubble_height = text_rect.height() + 22;
-        const int avatar_size = 28;
-        const int side_margin = 14;
-        const int avatar_gap = 8;
-        const int time_gap = 10;
-        const int time_width = time_metrics.horizontalAdvance(time);
-        const int time_height = time_metrics.height();
-        const int top = rect.top() + 6;
-
-        QRect bubble_rect;
-        QRect avatar_rect;
-        QRect time_rect;
-
-        if (outgoing) {
-            const int bubble_right = rect.right() - side_margin;
-            bubble_rect = QRect(bubble_right - bubble_width + 1, top, bubble_width, bubble_height);
-            time_rect = QRect(bubble_rect.left() - time_gap - time_width,
-                              bubble_rect.bottom() - time_height,
-                              time_width,
-                              time_height);
-        } else {
-            avatar_rect = QRect(rect.left() + side_margin,
-                                top + std::max(0, bubble_height - avatar_size),
-                                avatar_size,
-                                avatar_size);
-            bubble_rect = QRect(avatar_rect.right() + avatar_gap,
-                                top,
-                                bubble_width,
-                                bubble_height);
-            time_rect = QRect(bubble_rect.right() + time_gap,
-                              bubble_rect.bottom() - time_height,
-                              time_width,
-                              time_height);
-        }
-
-        if (!outgoing) {
-            drawAvatar(painter, avatar_rect, seed);
-        }
-
-        const QColor bubble_color = outgoing ? QColor(QStringLiteral("#3B82F6"))
-                                             : QColor(QStringLiteral("#FFFFFF"));
-        const QColor border_color = outgoing ? QColor(QStringLiteral("#3B82F6"))
-                                             : QColor(QStringLiteral("#E2E6EA"));
-        const QColor text_color = outgoing ? QColor(Qt::white)
-                                           : QColor(QStringLiteral("#111827"));
-
-        painter->setPen(QPen(border_color, outgoing ? 0.0 : 1.0));
-        painter->setBrush(bubble_color);
-        painter->drawPath(bubblePath(QRectF(bubble_rect), outgoing));
-
-        painter->setFont(bubble_font);
-        painter->setPen(text_color);
-        painter->drawText(bubble_rect.adjusted(14, 11, -14, -11),
-                          Qt::TextWordWrap | Qt::AlignLeft | Qt::AlignVCenter,
-                          text);
-
-        painter->setFont(time_font);
-        painter->setPen(QColor(QStringLiteral("#9CA3AF")));
-        painter->drawText(time_rect, Qt::AlignVCenter | Qt::AlignLeft, time);
-
-        painter->restore();
-    }
-
-private:
-    static void drawDivider(QPainter* painter,
-                            const QRect& rect,
-                            const QString& label,
-                            const QStyleOptionViewItem& option) {
-        QFont font = option.font;
-        font.setPixelSize(12);
-        painter->setFont(font);
-        painter->setPen(QColor(QStringLiteral("#9CA3AF")));
-
-        const QString text = formatDividerDate(label);
-        const QFontMetrics metrics(font);
-        const int text_width = metrics.horizontalAdvance(text) + 20;
-        const int center_y = rect.center().y();
-        const int text_left = rect.center().x() - text_width / 2;
-        const int text_right = rect.center().x() + text_width / 2;
-
-        painter->setPen(QPen(QColor(QStringLiteral("#D1D5DB")), 1.0));
-        painter->drawLine(rect.left() + 20, center_y, text_left, center_y);
-        painter->drawLine(text_right, center_y, rect.right() - 20, center_y);
-
-        painter->setPen(QColor(QStringLiteral("#9CA3AF")));
-        painter->drawText(QRect(text_left, rect.top(), text_width, rect.height()),
-                          Qt::AlignCenter,
-                          text);
-    }
-
-    static void drawAvatar(QPainter* painter, const QRect& rect, const QString& seed) {
-        static const QColor backgrounds[] = {
-            QColor(QStringLiteral("#3B82F6")),
-            QColor(QStringLiteral("#2563EB")),
-            QColor(QStringLiteral("#22C55E")),
-            QColor(QStringLiteral("#6B7280")),
-            QColor(QStringLiteral("#9CA3AF")),
-            QColor(QStringLiteral("#111827")),
-        };
-
-        const QColor background = backgrounds[avatarVariantForSeed(seed)];
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(background);
-        painter->drawEllipse(rect);
-
-        QFont font = painter->font();
-        font.setPixelSize(12);
-        font.setBold(true);
-        painter->setFont(font);
-        painter->setPen(Qt::white);
-        painter->drawText(rect, Qt::AlignCenter, seed.left(1).toUpper());
-    }
-};
 
 QWidget* createContactItemWidget(const QString& username,
                                  const QString& preview,
@@ -511,102 +287,6 @@ QWidget* createContactItemWidget(const QString& username,
     root->addWidget(body, 1);
     allowViewToHandleMouseEvents(frame);
     return frame;
-}
-
-QWidget* createFileItemWidget(const cloudvault::FileEntry& entry,
-                              bool selected,
-                              QWidget* parent = nullptr) {
-    auto* frame = new QFrame(parent);
-    frame->setObjectName(QStringLiteral("fileRowCard"));
-    frame->setProperty("selected", selected);
-
-    auto* layout = new QHBoxLayout(frame);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
-
-    auto* accent = new QFrame(frame);
-    accent->setObjectName(QStringLiteral("fileRowAccent"));
-    accent->setProperty("selected", selected);
-    accent->setFixedWidth(2);
-    layout->addWidget(accent);
-
-    auto* body = new QWidget(frame);
-    body->setMinimumHeight(44);
-    auto* row = new QHBoxLayout(body);
-    row->setContentsMargins(12, 0, 12, 0);
-    row->setSpacing(12);
-
-    auto* icon = createStandardIconLabel(entry.is_dir ? QStyle::SP_DirIcon
-                                                      : QStyle::SP_FileIcon,
-                                         20,
-                                         QStringLiteral("fileIconLabel"),
-                                         body);
-    row->addWidget(icon);
-
-    auto* name_label = new QLabel(entry.name, body);
-    name_label->setObjectName(QStringLiteral("fileNameLabel"));
-    name_label->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    row->addWidget(name_label, 1);
-
-    auto* size_label = new QLabel(entry.is_dir ? QStringLiteral("—")
-                                               : formatFileSize(entry.size),
-                                  body);
-    size_label->setObjectName(QStringLiteral("fileCellLabel"));
-    size_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    size_label->setFixedWidth(120);
-    row->addWidget(size_label);
-
-    auto* time_label = new QLabel(entry.modified_at, body);
-    time_label->setObjectName(QStringLiteral("fileCellLabel"));
-    time_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    time_label->setFixedWidth(140);
-    row->addWidget(time_label);
-
-    auto* type_label = new QLabel(entry.is_dir ? QStringLiteral("文件夹")
-                                               : QStringLiteral("文件"),
-                                  body);
-    type_label->setObjectName(QStringLiteral("fileTypeLabel"));
-    type_label->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    type_label->setFixedWidth(80);
-    row->addWidget(type_label);
-
-    layout->addWidget(body, 1);
-    frame->setToolTip(entry.path);
-    allowViewToHandleMouseEvents(frame);
-    return frame;
-}
-
-QWidget* createDetailFileRow(const QString& title,
-                             const QString& meta,
-                             QWidget* parent = nullptr) {
-    auto* row = new QFrame(parent);
-    row->setObjectName(QStringLiteral("detailFileRow"));
-    auto* layout = new QHBoxLayout(row);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(10);
-
-    auto* icon_wrap = createStandardIconLabel(QStyle::SP_FileIcon,
-                                              18,
-                                              QStringLiteral("detailFileIcon"),
-                                              row);
-    icon_wrap->setFixedSize(28, 28);
-    layout->addWidget(icon_wrap, 0, Qt::AlignTop);
-
-    auto* text_layout = new QVBoxLayout();
-    text_layout->setContentsMargins(0, 0, 0, 0);
-    text_layout->setSpacing(1);
-
-    auto* name_label = new QLabel(title, row);
-    name_label->setObjectName(QStringLiteral("detailFileName"));
-    text_layout->addWidget(name_label);
-
-    auto* meta_label = new QLabel(meta, row);
-    meta_label->setObjectName(QStringLiteral("detailFileMeta"));
-    meta_label->setWordWrap(true);
-    text_layout->addWidget(meta_label);
-
-    layout->addLayout(text_layout, 1);
-    return row;
 }
 
 } // namespace
@@ -728,14 +408,7 @@ void MainWindow::setupUi() {
 
     {
         chat_panel_widget_ = new ChatPanel(current_username_, center_stack_);
-        chat_stack_ = chat_panel_widget_->stack();
-        chat_avatar_label_ = chat_panel_widget_->avatarLabel();
-        chat_title_label_ = chat_panel_widget_->titleLabel();
-        chat_status_label_ = chat_panel_widget_->statusLabel();
-        group_chat_title_label_ = chat_panel_widget_->groupTitleLabel();
-        group_chat_status_label_ = chat_panel_widget_->groupStatusLabel();
         message_list_ = chat_panel_widget_->messageList();
-        message_list_->setItemDelegate(new MessageBubbleDelegate(message_list_));
         message_input_ = chat_panel_widget_->messageInput();
         send_btn_ = chat_panel_widget_->sendButton();
         group_list_btn_ = chat_panel_widget_->groupListButton();
@@ -745,7 +418,6 @@ void MainWindow::setupUi() {
     {
         file_panel_widget_ = new FilePanel(center_stack_);
         file_path_label_ = file_panel_widget_->pathLabel();
-        file_status_label_ = file_panel_widget_->statusLabel();
         file_search_edit_ = file_panel_widget_->searchEdit();
         file_list_ = file_panel_widget_->fileList();
         file_empty_state_label_ = file_panel_widget_->emptyStateLabel();
@@ -753,13 +425,7 @@ void MainWindow::setupUi() {
         file_upload_btn_ = file_panel_widget_->uploadButton();
         file_refresh_btn_ = file_panel_widget_->refreshButton();
         file_create_btn_ = file_panel_widget_->createButton();
-        file_transfer_row_ = file_panel_widget_->transferRow();
-        file_transfer_label_ = file_panel_widget_->transferLabel();
-        file_transfer_percent_label_ = file_panel_widget_->transferPercentLabel();
-        file_transfer_bar_ = file_panel_widget_->transferBar();
         file_transfer_cancel_btn_ = file_panel_widget_->transferCancelButton();
-        detail_file_target_label_ = file_panel_widget_->selectionLabel();
-        detail_file_meta_label_ = file_panel_widget_->metaLabel();
         file_download_btn_ = file_panel_widget_->downloadButton();
         file_share_btn_ = file_panel_widget_->shareButton();
         file_rename_btn_ = file_panel_widget_->renameButton();
@@ -854,11 +520,6 @@ void MainWindow::setupUi() {
 
     detail_panel_widget_ = new DetailPanel(current_username_, content_splitter_);
     detail_panel_ = detail_panel_widget_;
-    detail_contact_avatar_label_ = detail_panel_widget_->contactAvatarLabel();
-    detail_contact_name_label_ = detail_panel_widget_->contactNameLabel();
-    detail_contact_status_label_ = detail_panel_widget_->contactStatusLabel();
-    detail_shared_files_layout_ = detail_panel_widget_->sharedFilesLayout();
-    detail_shared_empty_label_ = detail_panel_widget_->sharedEmptyLabel();
 
     content_splitter_->addWidget(sidebar_panel_);
     content_splitter_->addWidget(center_panel);
@@ -1015,7 +676,9 @@ void MainWindow::connectSignals() {
                                message.from == current_username_ ? QStringLiteral("→")
                                                                  : QStringLiteral("●"));
                 if (peer == active_chat_peer_) {
-                    appendChatMessage(message);
+                    if (chat_panel_widget_) {
+                        chat_panel_widget_->appendMessage(message, current_username_);
+                    }
                     showChatConversation(peer, selectedFriendOnline());
                 }
             });
@@ -1026,7 +689,9 @@ void MainWindow::connectSignals() {
                 if (peer != active_chat_peer_) {
                     return;
                 }
-                rebuildMessageList(messages);
+                if (chat_panel_widget_) {
+                    chat_panel_widget_->rebuildMessages(messages, current_username_);
+                }
 
                 QDateTime latest_incoming;
                 for (const auto& message : messages) {
@@ -1049,7 +714,9 @@ void MainWindow::connectSignals() {
                     return;
                 }
                 showChatConversation(peer, selectedFriendOnline());
-                chat_status_label_->setText(reason);
+                if (chat_panel_widget_) {
+                    chat_panel_widget_->setConversationStatus(reason);
+                }
             });
 
     connect(&friend_service_, &cloudvault::FriendService::friendsRefreshed,
@@ -1258,89 +925,37 @@ void MainWindow::connectSignals() {
     });
 }
 
-void MainWindow::appendChatMessage(const cloudvault::ChatMessage& message) {
-    appendDateDividerIfNeeded(message.timestamp);
-
-    auto* item = new QListWidgetItem(message_list_);
-    item->setData(kMessageKindRole, QStringLiteral("message"));
-    item->setData(kMessageContentRole, message.content);
-    item->setData(kMessageTimestampRole, message.timestamp);
-    item->setData(kMessageOutgoingRole, message.from == current_username_);
-    item->setData(kMessageAvatarSeedRole, (message.from == current_username_) ? current_username_
-                                                                              : message.from);
-    message_list_->scrollToBottom();
-}
-
-void MainWindow::rebuildMessageList(const QList<cloudvault::ChatMessage>& messages) {
-    message_list_->clear();
-    for (const auto& message : messages) {
-        appendChatMessage(message);
-    }
-    message_list_->scrollToBottom();
-}
-
 void MainWindow::showChatEmptyState() {
     active_chat_peer_.clear();
     active_group_name_.clear();
-    if (chat_stack_) {
-        chat_stack_->setCurrentIndex(0);
+    if (chat_panel_widget_) {
+        chat_panel_widget_->showEmptyState();
     }
-    if (chat_title_label_) {
-        chat_title_label_->setText(QStringLiteral("CloudVault"));
-    }
-    if (chat_status_label_) {
-        chat_status_label_->setText(QStringLiteral("请选择联系人开始聊天"));
-    }
-    if (message_list_) {
-        message_list_->clear();
-    }
-    if (detail_contact_name_label_) {
-        detail_contact_name_label_->setText(QStringLiteral("未选择联系人"));
-    }
-    if (detail_contact_status_label_) {
-        detail_contact_status_label_->setText(QStringLiteral("请选择左侧联系人"));
-    }
-    if (detail_shared_empty_label_) {
-        detail_shared_empty_label_->setText(QStringLiteral("选择联系人后可查看共享文件"));
-    }
-    if (detail_contact_avatar_label_) {
-        prepareAvatarBadge(detail_contact_avatar_label_, current_username_, 26);
+    if (detail_panel_widget_) {
+        detail_panel_widget_->showEmptyState(current_username_);
     }
 }
 
 void MainWindow::showChatConversation(const QString& username, bool online) {
-    if (chat_stack_) {
-        chat_stack_->setCurrentIndex(1);
-    }
     active_group_name_.clear();
-    chat_title_label_->setText(username);
-    chat_status_label_->setText(formatPresence(online));
-    if (chat_avatar_label_) {
-        prepareAvatarBadge(chat_avatar_label_, username, 34);
+    if (chat_panel_widget_) {
+        chat_panel_widget_->showConversationHeader(username, formatPresence(online));
     }
-    detail_contact_name_label_->setText(username);
-    detail_contact_status_label_->setText(formatPresence(online));
-    if (detail_contact_avatar_label_) {
-        prepareAvatarBadge(detail_contact_avatar_label_, username, 26);
-    }
-
-    while (detail_shared_files_layout_->count() > 0) {
-        if (auto* item = detail_shared_files_layout_->takeAt(0)) {
-            delete item->widget();
-            delete item;
-        }
+    if (detail_panel_widget_) {
+        detail_panel_widget_->showContact(username, online);
     }
 
     const auto summary_it = conversation_summaries_.constFind(username);
     if (summary_it != conversation_summaries_.constEnd() && summary_it->has_message) {
-        detail_shared_empty_label_->setVisible(false);
-        detail_shared_files_layout_->addWidget(
-            createDetailFileRow(QStringLiteral("最近会话"),
-                                summary_it->preview,
-                                detail_panel_));
+        if (detail_panel_widget_) {
+            detail_panel_widget_->addSharedSummary(QStringLiteral("最近会话"),
+                                                   summary_it->preview);
+        }
     } else {
-        detail_shared_empty_label_->setText(QStringLiteral("暂无与 %1 的共享文件").arg(username));
-        detail_shared_empty_label_->setVisible(true);
+        if (detail_panel_widget_) {
+            detail_panel_widget_->showSharedEmptyMessage(
+                QStringLiteral("暂无与 %1 的共享文件").arg(username));
+        }
     }
 }
 
@@ -1595,7 +1210,9 @@ void MainWindow::applySelectedFriend() {
     active_chat_peer_ = username;
     clearConversationUnread(username);
     showChatConversation(username, online);
-    chat_status_label_->setText(QStringLiteral("正在加载历史消息…"));
+    if (chat_panel_widget_) {
+        chat_panel_widget_->setConversationStatus(QStringLiteral("正在加载历史消息…"));
+    }
     requestConversationSnapshot(username);
 }
 
@@ -1618,7 +1235,9 @@ void MainWindow::sendCurrentMessage() {
         content,
         QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz")),
     };
-    appendChatMessage(local_message);
+    if (chat_panel_widget_) {
+        chat_panel_widget_->appendMessage(local_message, current_username_);
+    }
     applyConversationMessage(local_message, false);
     message_input_->clear();
     showChatConversation(active_chat_peer_, selectedFriendOnline());
@@ -1630,14 +1249,15 @@ void MainWindow::sendCurrentMessage() {
 }
 
 void MainWindow::setFileStatus(const QString& message, bool error) {
-    file_status_label_->setProperty("error", error);
-    file_status_label_->setText(message);
-    repolish(file_status_label_);
+    if (file_panel_widget_) {
+        file_panel_widget_->setStatusMessage(message, error);
+    }
 }
 
 void MainWindow::resetFileActionSummary() {
-    detail_file_target_label_->setText(QStringLiteral("选中：未选择文件"));
-    detail_file_meta_label_->setText(QStringLiteral("未选择文件"));
+    if (file_panel_widget_) {
+        file_panel_widget_->resetSelectionSummary();
+    }
 }
 
 void MainWindow::refreshFileList(const QString& path,
@@ -1646,34 +1266,30 @@ void MainWindow::refreshFileList(const QString& path,
         current_file_path_ = path.isEmpty() ? QStringLiteral("/") : path;
     }
     current_file_entries_ = entries;
-    file_list_->clear();
-
-    for (const auto& entry : entries) {
-        auto* item = new QListWidgetItem(file_list_);
-        item->setSizeHint(QSize(0, 44));
-        item->setData(Qt::UserRole, entry.path);
-        item->setData(Qt::UserRole + 1, entry.is_dir);
-        item->setData(Qt::UserRole + 2, entry.name);
-        auto* widget = createFileItemWidget(entry, false, file_list_);
-        file_list_->setItemWidget(item, widget);
+    if (file_panel_widget_) {
+        file_panel_widget_->populateEntries(entries);
     }
 
-    if (file_search_mode_) {
-        file_path_label_->setText(QStringLiteral("搜索：%1").arg(current_file_query_));
-    } else {
-        file_path_label_->setText(current_file_path_);
+    if (file_panel_widget_) {
+        file_panel_widget_->setPathState(
+            file_search_mode_
+                ? QStringLiteral("搜索：%1").arg(current_file_query_)
+                : current_file_path_,
+            file_search_mode_ ? current_file_query_ : current_file_path_,
+            file_search_mode_ || current_file_path_ != QStringLiteral("/"));
     }
-    file_path_label_->setToolTip(file_search_mode_ ? current_file_query_ : current_file_path_);
-    file_back_btn_->setEnabled(file_search_mode_ || current_file_path_ != QStringLiteral("/"));
-
-    file_empty_state_label_->setText(file_search_mode_
-        ? QStringLiteral("没有匹配的文件\n修改关键词后回车重新搜索")
-        : QStringLiteral("当前目录为空\n点击“+ 新建”或使用“上传”开始管理文件"));
-    file_empty_state_label_->setVisible(file_list_->count() == 0);
-    file_list_->setVisible(file_list_->count() > 0);
+    if (file_panel_widget_) {
+        file_panel_widget_->setEmptyState(
+            file_search_mode_
+                ? QStringLiteral("没有匹配的文件\n修改关键词后回车重新搜索")
+                : QStringLiteral("当前目录为空\n点击“+ 新建”或使用“上传”开始管理文件"),
+            file_list_->count() == 0);
+    }
 
     if (file_list_->count() > 0) {
-        file_list_->setCurrentRow(0);
+        if (file_panel_widget_) {
+            file_panel_widget_->selectFirstEntry();
+        }
         setFileStatus(file_search_mode_
                           ? QStringLiteral("搜索完成，共找到 %1 项。").arg(file_list_->count())
                           : QStringLiteral("目录已刷新，共 %1 项。").arg(file_list_->count()));
@@ -1688,18 +1304,8 @@ void MainWindow::refreshFileList(const QString& path,
 }
 
 void MainWindow::updateFileSelectionState() {
-    for (int i = 0; i < file_list_->count(); ++i) {
-        auto* item = file_list_->item(i);
-        auto* widget = file_list_->itemWidget(item);
-        if (!widget) {
-            continue;
-        }
-        widget->setProperty("selected", item->isSelected());
-        if (auto* accent = widget->findChild<QFrame*>(QStringLiteral("fileRowAccent"))) {
-            accent->setProperty("selected", item->isSelected());
-            repolish(accent);
-        }
-        repolish(widget);
+    if (file_panel_widget_) {
+        file_panel_widget_->refreshSelectionHighlights();
     }
 
     const bool has_selection = file_list_->currentItem() != nullptr;
@@ -1722,11 +1328,13 @@ void MainWindow::applySelectedFile() {
 
     const bool is_dir = selectedFileIsDir();
     const QString name = file_list_->currentItem()->data(Qt::UserRole + 2).toString();
-    detail_file_target_label_->setText(QStringLiteral("选中：%1").arg(name));
-    detail_file_meta_label_->setText(is_dir
-        ? QStringLiteral("目录 · 双击可进入")
-        : QStringLiteral("文件 · 可下载 / 分享 / 重命名 / 移动 / 删除"));
-    detail_file_meta_label_->setToolTip(path);
+    if (file_panel_widget_) {
+        file_panel_widget_->setSelectionSummary(
+            name,
+            is_dir ? QStringLiteral("目录 · 双击可进入")
+                   : QStringLiteral("文件 · 可下载 / 分享 / 重命名 / 移动 / 删除"),
+            path);
+    }
 }
 
 void MainWindow::navigateToFilePath(const QString& path) {
@@ -1910,11 +1518,8 @@ void MainWindow::openGroupListDialog() {
     connect(&dialog, &GroupListDialog::groupChosen, this, [this](const QString& group_name) {
         active_chat_peer_.clear();
         active_group_name_ = group_name;
-        if (chat_stack_) {
-            chat_stack_->setCurrentIndex(2);
-        }
-        if (group_chat_title_label_) {
-            group_chat_title_label_->setText(group_name);
+        if (chat_panel_widget_) {
+            chat_panel_widget_->showGroupPlaceholder(group_name);
         }
         appendEventLog(QStringLiteral("进入群聊 %1").arg(group_name), QStringLiteral("→"));
     });
@@ -2003,17 +1608,15 @@ void MainWindow::startNextQueuedUpload() {
 }
 
 void MainWindow::showTransferRow(const QString& title, int percent, bool cancellable) {
-    file_transfer_row_->show();
-    file_transfer_label_->setText(title);
-    file_transfer_bar_->setValue(std::clamp(percent, 0, 100));
-    file_transfer_percent_label_->setText(QStringLiteral("%1%").arg(std::clamp(percent, 0, 100)));
-    file_transfer_cancel_btn_->setEnabled(cancellable);
+    if (file_panel_widget_) {
+        file_panel_widget_->setTransferState(title, percent, cancellable);
+    }
 }
 
 void MainWindow::hideTransferRow() {
-    file_transfer_row_->hide();
-    file_transfer_bar_->setValue(0);
-    file_transfer_percent_label_->setText(QStringLiteral("0%"));
+    if (file_panel_widget_) {
+        file_panel_widget_->clearTransferState();
+    }
 }
 
 void MainWindow::appendEventLog(const QString& message, const QString& icon) {
@@ -2097,26 +1700,4 @@ bool MainWindow::selectedFileIsDir() const {
         return item->data(Qt::UserRole + 1).toBool();
     }
     return false;
-}
-
-void MainWindow::appendDateDividerIfNeeded(const QString& timestamp) {
-    const QString current_date = dateKeyForTimestamp(timestamp);
-    if (message_list_->count() > 0) {
-        if (auto* last_item = message_list_->item(message_list_->count() - 1)) {
-            if (last_item->data(kMessageKindRole).toString() == QStringLiteral("message")) {
-                const QString last_date = dateKeyForTimestamp(
-                    last_item->data(kMessageTimestampRole).toString());
-                if (last_date == current_date) {
-                    return;
-                }
-            } else if (last_item->data(kMessageKindRole).toString() == QStringLiteral("divider") &&
-                       last_item->data(kMessageDateRole).toString() == current_date) {
-                return;
-            }
-        }
-    }
-
-    auto* divider = new QListWidgetItem(message_list_);
-    divider->setData(kMessageKindRole, QStringLiteral("divider"));
-    divider->setData(kMessageDateRole, current_date);
 }

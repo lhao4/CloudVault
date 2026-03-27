@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include "service/file_service.h"
+
 #include <QWidget>
 
 class QLabel;
@@ -19,6 +21,19 @@ class FilePanel : public QWidget {
 
 public:
     explicit FilePanel(QWidget* parent = nullptr);
+
+    void setStatusMessage(const QString& message, bool error = false);
+    void resetSelectionSummary();
+    void setSelectionSummary(const QString& name,
+                             const QString& meta,
+                             const QString& tooltip = QString());
+    void setTransferState(const QString& title, int percent, bool cancellable);
+    void clearTransferState();
+    void populateEntries(const cloudvault::FileEntries& entries);
+    void setPathState(const QString& text, const QString& tooltip, bool can_go_back);
+    void setEmptyState(const QString& text, bool empty);
+    void selectFirstEntry();
+    void refreshSelectionHighlights();
 
     QLabel* pathLabel() const;
     QLabel* statusLabel() const;

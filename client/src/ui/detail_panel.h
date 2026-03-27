@@ -16,6 +16,12 @@ class DetailPanel : public QFrame {
 public:
     explicit DetailPanel(const QString& current_username, QWidget* parent = nullptr);
 
+    void showEmptyState(const QString& current_username);
+    void showContact(const QString& username, bool online);
+    void clearSharedFiles();
+    void addSharedSummary(const QString& title, const QString& meta);
+    void showSharedEmptyMessage(const QString& message);
+
     QLabel* contactAvatarLabel() const;
     QLabel* contactNameLabel() const;
     QLabel* contactStatusLabel() const;

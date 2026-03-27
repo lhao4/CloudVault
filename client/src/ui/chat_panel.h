@@ -5,6 +5,9 @@
 
 #pragma once
 
+#include "service/chat_service.h"
+
+#include <QList>
 #include <QWidget>
 
 class QLabel;
@@ -18,6 +21,14 @@ class ChatPanel : public QWidget {
 
 public:
     explicit ChatPanel(const QString& current_username, QWidget* parent = nullptr);
+
+    void showEmptyState();
+    void showConversationHeader(const QString& username, const QString& presence);
+    void setConversationStatus(const QString& status);
+    void showGroupPlaceholder(const QString& group_name);
+    void appendMessage(const cloudvault::ChatMessage& message, const QString& current_username);
+    void rebuildMessages(const QList<cloudvault::ChatMessage>& messages,
+                         const QString& current_username);
 
     QStackedWidget* stack() const;
     QLabel* avatarLabel() const;
@@ -35,6 +46,8 @@ signals:
     void groupListRequested();
 
 private:
+    void appendDateDividerIfNeeded(const QString& timestamp);
+
     QStackedWidget* stack_ = nullptr;
     QLabel* avatar_label_ = nullptr;
     QLabel* title_label_ = nullptr;
