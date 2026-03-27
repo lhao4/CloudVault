@@ -152,24 +152,11 @@ private:
     DetailPanel* detail_panel_widget_ = nullptr;
 
     QListWidget* message_list_ = nullptr;
-    QLabel* file_path_label_ = nullptr;
-    QLineEdit* file_search_edit_ = nullptr;
     QListWidget* file_list_ = nullptr;
-    QLabel* file_empty_state_label_ = nullptr;
-    QPushButton* file_back_btn_ = nullptr;
-    QPushButton* file_upload_btn_ = nullptr;
-    QPushButton* file_refresh_btn_ = nullptr;
-    QPushButton* file_create_btn_ = nullptr;
-    QPushButton* file_transfer_cancel_btn_ = nullptr;
     QLabel* profile_name_label_ = nullptr;
     QLabel* profile_id_label_ = nullptr;
     QLineEdit* profile_nickname_edit_ = nullptr;
     QLineEdit* profile_signature_edit_ = nullptr;
     QPushButton* logout_btn_ = nullptr;
-    QPushButton* file_share_btn_ = nullptr;
-    QPushButton* file_download_btn_ = nullptr;
-    QPushButton* file_rename_btn_ = nullptr;
-    QPushButton* file_move_btn_ = nullptr;
-    QPushButton* file_delete_btn_ = nullptr;
     QStringList pending_upload_paths_;
 };

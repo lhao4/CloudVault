@@ -296,20 +296,7 @@ void MainWindow::setupUi() {
 
     {
         file_panel_widget_ = new FilePanel(center_stack_);
-        file_path_label_ = file_panel_widget_->pathLabel();
-        file_search_edit_ = file_panel_widget_->searchEdit();
         file_list_ = file_panel_widget_->fileList();
-        file_empty_state_label_ = file_panel_widget_->emptyStateLabel();
-        file_back_btn_ = file_panel_widget_->backButton();
-        file_upload_btn_ = file_panel_widget_->uploadButton();
-        file_refresh_btn_ = file_panel_widget_->refreshButton();
-        file_create_btn_ = file_panel_widget_->createButton();
-        file_transfer_cancel_btn_ = file_panel_widget_->transferCancelButton();
-        file_download_btn_ = file_panel_widget_->downloadButton();
-        file_share_btn_ = file_panel_widget_->shareButton();
-        file_rename_btn_ = file_panel_widget_->renameButton();
-        file_move_btn_ = file_panel_widget_->moveButton();
-        file_delete_btn_ = file_panel_widget_->deleteButton();
         center_stack_->addWidget(file_panel_widget_);
     }
 
@@ -492,9 +479,9 @@ void MainWindow::connectSignals() {
         appendEventLog(QStringLiteral("用户请求退出登录"), QStringLiteral("→"));
     });
 
-    connect(file_back_btn_, &QPushButton::clicked, this, &MainWindow::openCurrentParentDirectory);
-    connect(file_upload_btn_, &QPushButton::clicked, this, &MainWindow::uploadFile);
-    connect(file_refresh_btn_, &QPushButton::clicked,
+    connect(file_panel_widget_, &FilePanel::backRequested, this, &MainWindow::openCurrentParentDirectory);
+    connect(file_panel_widget_, &FilePanel::uploadRequested, this, &MainWindow::uploadFile);
+    connect(file_panel_widget_, &FilePanel::refreshRequested,
             this, [this] {
                 if (file_search_mode_ && !current_file_query_.isEmpty()) {
                     setFileStatus(QStringLiteral("正在刷新搜索结果…"));
@@ -506,34 +493,35 @@ void MainWindow::connectSignals() {
                     file_service_.listFiles(current_file_path_);
                 }
             });
-    connect(file_create_btn_, &QPushButton::clicked, this, &MainWindow::createDirectory);
-    connect(file_search_edit_, &QLineEdit::returnPressed, this, &MainWindow::runFileSearch);
-    connect(file_search_edit_, &QLineEdit::textChanged, this, &MainWindow::clearFileSearchIfNeeded);
-    connect(file_list_, &QListWidget::itemSelectionChanged, this, &MainWindow::applySelectedFile);
-    connect(file_list_, &QListWidget::itemDoubleClicked,
-            this, [this](QListWidgetItem* item) {
-                if (!item) {
-                    return;
-                }
-                if (!item->data(Qt::UserRole + 1).toBool()) {
+    connect(file_panel_widget_, &FilePanel::createRequested, this, &MainWindow::createDirectory);
+    connect(file_panel_widget_, &FilePanel::searchRequested, this, &MainWindow::runFileSearch);
+    connect(file_panel_widget_, &FilePanel::searchTextChanged, this, &MainWindow::clearFileSearchIfNeeded);
+    connect(file_panel_widget_, &FilePanel::selectionChanged, this, &MainWindow::applySelectedFile);
+    connect(file_panel_widget_, &FilePanel::itemActivated,
+            this, [this] {
+                if (!selectedFileIsDir()) {
                     return;
                 }
                 file_search_mode_ = false;
                 current_file_query_.clear();
-                file_search_edit_->clear();
-                navigateToFilePath(item->data(Qt::UserRole).toString());
+                if (file_panel_widget_) {
+                    file_panel_widget_->clearSearch();
+                }
+                navigateToFilePath(selectedFilePath());
             });
-    connect(file_rename_btn_, &QPushButton::clicked, this, &MainWindow::renameSelectedFile);
-    connect(file_move_btn_, &QPushButton::clicked, this, &MainWindow::moveSelectedFile);
-    connect(file_delete_btn_, &QPushButton::clicked, this, &MainWindow::deleteSelectedFile);
-    connect(file_download_btn_, &QPushButton::clicked, this, &MainWindow::downloadSelectedFile);
-    connect(file_share_btn_, &QPushButton::clicked, this, &MainWindow::openShareFileDialog);
-    connect(file_transfer_cancel_btn_, &QPushButton::clicked,
+    connect(file_panel_widget_, &FilePanel::renameRequested, this, &MainWindow::renameSelectedFile);
+    connect(file_panel_widget_, &FilePanel::moveRequested, this, &MainWindow::moveSelectedFile);
+    connect(file_panel_widget_, &FilePanel::deleteRequested, this, &MainWindow::deleteSelectedFile);
+    connect(file_panel_widget_, &FilePanel::downloadRequested, this, &MainWindow::downloadSelectedFile);
+    connect(file_panel_widget_, &FilePanel::shareRequested, this, &MainWindow::openShareFileDialog);
+    connect(file_panel_widget_, &FilePanel::transferCancelRequested,
             this, [this] {
                 if (!pending_upload_paths_.isEmpty()) {
                     pending_upload_paths_.clear();
                     setFileStatus(QStringLiteral("已清空等待中的上传队列，当前正在进行的传输不会中断。"));
-                    file_transfer_cancel_btn_->setEnabled(false);
+                    if (file_panel_widget_) {
+                        file_panel_widget_->setTransferCancelEnabled(false);
+                    }
                     return;
                 }
                 QMessageBox::information(this,
@@ -644,7 +632,9 @@ void MainWindow::connectSignals() {
                 appendEventLog(message, QStringLiteral("✓"));
                 file_search_mode_ = false;
                 current_file_query_.clear();
-                file_search_edit_->clear();
+                if (file_panel_widget_) {
+                    file_panel_widget_->clearSearch();
+                }
                 file_service_.listFiles(current_file_path_);
             });
     connect(&file_service_, &cloudvault::FileService::fileOperationFailed,
@@ -669,7 +659,9 @@ void MainWindow::connectSignals() {
                                QStringLiteral("✓"));
                 file_search_mode_ = false;
                 current_file_query_.clear();
-                file_search_edit_->clear();
+                if (file_panel_widget_) {
+                    file_panel_widget_->clearSearch();
+                }
                 file_service_.listFiles(current_file_path_);
                 QTimer::singleShot(0, this, &MainWindow::startNextQueuedUpload);
                 QTimer::singleShot(1500, this, [this] {
@@ -740,7 +732,9 @@ void MainWindow::connectSignals() {
                 setFileStatus(message);
                 file_search_mode_ = false;
                 current_file_query_.clear();
-                file_search_edit_->clear();
+                if (file_panel_widget_) {
+                    file_panel_widget_->clearSearch();
+                }
                 file_service_.listFiles(QStringLiteral("/"));
             });
     connect(&share_service_, &cloudvault::ShareService::shareAcceptFailed,
@@ -769,14 +763,14 @@ void MainWindow::connectSignals() {
 
     auto* delete_shortcut = new QShortcut(QKeySequence(Qt::Key_Delete), this);
     connect(delete_shortcut, &QShortcut::activated, this, [this] {
-        if (center_stack_->currentIndex() == 1 && file_list_->currentItem()) {
+        if (center_stack_->currentIndex() == 1 && file_panel_widget_ && file_panel_widget_->hasSelection()) {
             deleteSelectedFile();
         }
     });
 
     auto* rename_shortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
     connect(rename_shortcut, &QShortcut::activated, this, [this] {
-        if (center_stack_->currentIndex() == 1 && file_list_->currentItem()) {
+        if (center_stack_->currentIndex() == 1 && file_panel_widget_ && file_panel_widget_->hasSelection()) {
             renameSelectedFile();
         }
     });
@@ -791,8 +785,9 @@ void MainWindow::connectSignals() {
     auto* focus_search_shortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+F")), this);
     connect(focus_search_shortcut, &QShortcut::activated, this, [this] {
         if (center_stack_->currentIndex() == 1) {
-            file_search_edit_->setFocus();
-            file_search_edit_->selectAll();
+            if (file_panel_widget_) {
+                file_panel_widget_->focusSearchSelectAll();
+            }
         }
     });
 
@@ -1165,11 +1160,9 @@ void MainWindow::updateFileSelectionState() {
 
     const bool has_selection = file_list_->currentItem() != nullptr;
     const bool is_file = has_selection && !selectedFileIsDir();
-    file_download_btn_->setEnabled(is_file);
-    file_share_btn_->setEnabled(is_file);
-    file_rename_btn_->setEnabled(has_selection);
-    file_move_btn_->setEnabled(has_selection);
-    file_delete_btn_->setEnabled(has_selection);
+    if (file_panel_widget_) {
+        file_panel_widget_->setActionButtonsEnabled(has_selection, is_file);
+    }
 }
 
 void MainWindow::applySelectedFile() {
@@ -1203,7 +1196,9 @@ void MainWindow::openCurrentParentDirectory() {
     if (file_search_mode_) {
         file_search_mode_ = false;
         current_file_query_.clear();
-        file_search_edit_->clear();
+        if (file_panel_widget_) {
+            file_panel_widget_->clearSearch();
+        }
         setFileStatus(QStringLiteral("返回当前目录…"));
         file_service_.listFiles(current_file_path_);
         return;
@@ -1240,7 +1235,7 @@ void MainWindow::renameSelectedFile() {
         return;
     }
 
-    const QString current_name = file_list_->currentItem()->data(Qt::UserRole + 2).toString();
+    const QString current_name = file_panel_widget_ ? file_panel_widget_->currentName() : QString();
     const QString new_name = QInputDialog::getText(
         this,
         QStringLiteral("重命名"),
@@ -1279,7 +1274,7 @@ void MainWindow::deleteSelectedFile() {
         return;
     }
 
-    const QString current_name = file_list_->currentItem()->data(Qt::UserRole + 2).toString();
+    const QString current_name = file_panel_widget_ ? file_panel_widget_->currentName() : QString();
     const auto reply = QMessageBox::question(
         this,
         QStringLiteral("删除"),
@@ -1293,7 +1288,8 @@ void MainWindow::deleteSelectedFile() {
 }
 
 void MainWindow::runFileSearch() {
-    const QString keyword = file_search_edit_->text().trimmed();
+    const QString keyword = file_panel_widget_ ? file_panel_widget_->searchText().trimmed()
+                                               : QString();
     if (keyword.isEmpty()) {
         file_search_mode_ = false;
         current_file_query_.clear();
@@ -1395,7 +1391,7 @@ void MainWindow::openShareFileDialog() {
         return;
     }
 
-    const QString file_name = file_list_->currentItem()->data(Qt::UserRole + 2).toString();
+    const QString file_name = file_panel_widget_ ? file_panel_widget_->currentName() : QString();
     ShareFileDialog dialog(file_name, friends_, this);
     connect(&dialog, &ShareFileDialog::shareConfirmed,
             this, [this, path](const QString&, const QStringList& targets) {
@@ -1458,7 +1454,9 @@ void MainWindow::enqueueUploads(const QStringList& local_paths) {
 
 void MainWindow::startNextQueuedUpload() {
     if (file_service_.hasActiveTransfer() || pending_upload_paths_.isEmpty()) {
-        file_transfer_cancel_btn_->setEnabled(!pending_upload_paths_.isEmpty());
+        if (file_panel_widget_) {
+            file_panel_widget_->setTransferCancelEnabled(!pending_upload_paths_.isEmpty());
+        }
         return;
     }
 
@@ -1466,7 +1464,9 @@ void MainWindow::startNextQueuedUpload() {
     const QString filename = QFileInfo(next_path).fileName();
     showTransferRow(QStringLiteral("准备上传 %1").arg(filename), 0, true);
     setFileStatus(QStringLiteral("正在准备上传 %1 …").arg(filename));
-    file_transfer_cancel_btn_->setEnabled(!pending_upload_paths_.isEmpty());
+    if (file_panel_widget_) {
+        file_panel_widget_->setTransferCancelEnabled(!pending_upload_paths_.isEmpty());
+    }
     file_service_.uploadFile(next_path, current_file_path_);
 }
 
@@ -1546,15 +1546,9 @@ bool MainWindow::selectedFriendOnline() const {
 }
 
 QString MainWindow::selectedFilePath() const {
-    if (auto* item = file_list_->currentItem()) {
-        return item->data(Qt::UserRole).toString();
-    }
-    return {};
+    return file_panel_widget_ ? file_panel_widget_->currentPath() : QString();
 }
 
 bool MainWindow::selectedFileIsDir() const {
-    if (auto* item = file_list_->currentItem()) {
-        return item->data(Qt::UserRole + 1).toBool();
-    }
-    return false;
+    return file_panel_widget_ ? file_panel_widget_->currentIsDir() : false;
 }

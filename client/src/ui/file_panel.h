@@ -34,28 +34,33 @@ public:
     void setEmptyState(const QString& text, bool empty);
     void selectFirstEntry();
     void refreshSelectionHighlights();
+    QString searchText() const;
+    void clearSearch();
+    void focusSearchSelectAll();
+    bool hasSelection() const;
+    QString currentPath() const;
+    QString currentName() const;
+    bool currentIsDir() const;
+    void setActionButtonsEnabled(bool has_selection, bool is_file);
+    void setTransferCancelEnabled(bool enabled);
 
-    QLabel* pathLabel() const;
-    QLabel* statusLabel() const;
-    QLineEdit* searchEdit() const;
     QListWidget* fileList() const;
-    QLabel* emptyStateLabel() const;
-    QPushButton* backButton() const;
-    QPushButton* uploadButton() const;
-    QPushButton* refreshButton() const;
-    QPushButton* createButton() const;
-    QFrame* transferRow() const;
-    QLabel* transferLabel() const;
-    QLabel* transferPercentLabel() const;
-    QProgressBar* transferBar() const;
-    QPushButton* transferCancelButton() const;
-    QLabel* selectionLabel() const;
-    QLabel* metaLabel() const;
-    QPushButton* downloadButton() const;
-    QPushButton* shareButton() const;
-    QPushButton* renameButton() const;
-    QPushButton* moveButton() const;
-    QPushButton* deleteButton() const;
+
+signals:
+    void backRequested();
+    void uploadRequested();
+    void refreshRequested();
+    void createRequested();
+    void searchRequested();
+    void searchTextChanged(const QString& text);
+    void selectionChanged();
+    void itemActivated();
+    void renameRequested();
+    void moveRequested();
+    void deleteRequested();
+    void downloadRequested();
+    void shareRequested();
+    void transferCancelRequested();
 
 private:
     QLabel* path_label_ = nullptr;

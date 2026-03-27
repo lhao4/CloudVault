@@ -293,6 +293,23 @@ FilePanel::FilePanel(QWidget* parent)
     delete_btn_->setObjectName(QStringLiteral("deleteBtn"));
     footer_layout->addWidget(delete_btn_);
     page_layout->addWidget(footer);
+
+    connect(back_btn_, &QPushButton::clicked, this, &FilePanel::backRequested);
+    connect(upload_btn_, &QPushButton::clicked, this, &FilePanel::uploadRequested);
+    connect(refresh_btn_, &QPushButton::clicked, this, &FilePanel::refreshRequested);
+    connect(create_btn_, &QPushButton::clicked, this, &FilePanel::createRequested);
+    connect(search_edit_, &QLineEdit::returnPressed, this, &FilePanel::searchRequested);
+    connect(search_edit_, &QLineEdit::textChanged, this, &FilePanel::searchTextChanged);
+    connect(file_list_, &QListWidget::itemSelectionChanged, this, &FilePanel::selectionChanged);
+    connect(file_list_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem*) {
+        emit itemActivated();
+    });
+    connect(rename_btn_, &QPushButton::clicked, this, &FilePanel::renameRequested);
+    connect(move_btn_, &QPushButton::clicked, this, &FilePanel::moveRequested);
+    connect(delete_btn_, &QPushButton::clicked, this, &FilePanel::deleteRequested);
+    connect(download_btn_, &QPushButton::clicked, this, &FilePanel::downloadRequested);
+    connect(share_btn_, &QPushButton::clicked, this, &FilePanel::shareRequested);
+    connect(transfer_cancel_btn_, &QPushButton::clicked, this, &FilePanel::transferCancelRequested);
 }
 
 void FilePanel::setStatusMessage(const QString& message, bool error) {
@@ -413,24 +430,76 @@ void FilePanel::refreshSelectionHighlights() {
     }
 }
 
-QLabel* FilePanel::pathLabel() const { return path_label_; }
-QLabel* FilePanel::statusLabel() const { return status_label_; }
-QLineEdit* FilePanel::searchEdit() const { return search_edit_; }
+QString FilePanel::searchText() const {
+    return search_edit_ ? search_edit_->text() : QString();
+}
+
+void FilePanel::clearSearch() {
+    if (search_edit_) {
+        search_edit_->clear();
+    }
+}
+
+void FilePanel::focusSearchSelectAll() {
+    if (search_edit_) {
+        search_edit_->setFocus();
+        search_edit_->selectAll();
+    }
+}
+
+bool FilePanel::hasSelection() const {
+    return file_list_ && file_list_->currentItem();
+}
+
+QString FilePanel::currentPath() const {
+    if (file_list_) {
+        if (auto* item = file_list_->currentItem()) {
+            return item->data(Qt::UserRole).toString();
+        }
+    }
+    return {};
+}
+
+QString FilePanel::currentName() const {
+    if (file_list_) {
+        if (auto* item = file_list_->currentItem()) {
+            return item->data(Qt::UserRole + 2).toString();
+        }
+    }
+    return {};
+}
+
+bool FilePanel::currentIsDir() const {
+    if (file_list_) {
+        if (auto* item = file_list_->currentItem()) {
+            return item->data(Qt::UserRole + 1).toBool();
+        }
+    }
+    return false;
+}
+
+void FilePanel::setActionButtonsEnabled(bool has_selection, bool is_file) {
+    if (download_btn_) {
+        download_btn_->setEnabled(is_file);
+    }
+    if (share_btn_) {
+        share_btn_->setEnabled(is_file);
+    }
+    if (rename_btn_) {
+        rename_btn_->setEnabled(has_selection);
+    }
+    if (move_btn_) {
+        move_btn_->setEnabled(has_selection);
+    }
+    if (delete_btn_) {
+        delete_btn_->setEnabled(has_selection);
+    }
+}
+
+void FilePanel::setTransferCancelEnabled(bool enabled) {
+    if (transfer_cancel_btn_) {
+        transfer_cancel_btn_->setEnabled(enabled);
+    }
+}
+
 QListWidget* FilePanel::fileList() const { return file_list_; }
-QLabel* FilePanel::emptyStateLabel() const { return empty_state_label_; }
-QPushButton* FilePanel::backButton() const { return back_btn_; }
-QPushButton* FilePanel::uploadButton() const { return upload_btn_; }
-QPushButton* FilePanel::refreshButton() const { return refresh_btn_; }
-QPushButton* FilePanel::createButton() const { return create_btn_; }
-QFrame* FilePanel::transferRow() const { return transfer_row_; }
-QLabel* FilePanel::transferLabel() const { return transfer_label_; }
-QLabel* FilePanel::transferPercentLabel() const { return transfer_percent_label_; }
-QProgressBar* FilePanel::transferBar() const { return transfer_bar_; }
-QPushButton* FilePanel::transferCancelButton() const { return transfer_cancel_btn_; }
-QLabel* FilePanel::selectionLabel() const { return selection_label_; }
-QLabel* FilePanel::metaLabel() const { return meta_label_; }
-QPushButton* FilePanel::downloadButton() const { return download_btn_; }
-QPushButton* FilePanel::shareButton() const { return share_btn_; }
-QPushButton* FilePanel::renameButton() const { return rename_btn_; }
-QPushButton* FilePanel::moveButton() const { return move_btn_; }
-QPushButton* FilePanel::deleteButton() const { return delete_btn_; }
