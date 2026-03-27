@@ -159,8 +159,8 @@ QWidget* createContactItemWidget(const SidebarContactEntry& entry,
 SidebarPanel::SidebarPanel(QWidget* parent)
     : QFrame(parent) {
     setObjectName(QStringLiteral("sidebarPanel"));
-    setMinimumWidth(260);
-    setMaximumWidth(260);
+    setMinimumWidth(240);
+    setMaximumWidth(240);
 
     auto* sidebar_layout = new QVBoxLayout(this);
     sidebar_layout->setContentsMargins(0, 0, 0, 0);
@@ -170,7 +170,7 @@ SidebarPanel::SidebarPanel(QWidget* parent)
     sidebar_header->setObjectName(QStringLiteral("sidebarHeader"));
     sidebar_header->setFixedHeight(56);
     auto* sidebar_header_layout = new QHBoxLayout(sidebar_header);
-    sidebar_header_layout->setContentsMargins(16, 0, 12, 0);
+    sidebar_header_layout->setContentsMargins(14, 0, 12, 0);
     sidebar_header_layout->setSpacing(8);
 
     title_label_ = new QLabel(QStringLiteral("消息"), sidebar_header);
@@ -178,7 +178,7 @@ SidebarPanel::SidebarPanel(QWidget* parent)
     sidebar_header_layout->addWidget(title_label_);
     sidebar_header_layout->addStretch();
 
-    action_btn_ = createIconButton(QStringLiteral("群"),
+    action_btn_ = createIconButton(QStringLiteral("+"),
                                    QStringLiteral("查看在线用户"),
                                    30,
                                    sidebar_header);
@@ -193,7 +193,7 @@ SidebarPanel::SidebarPanel(QWidget* parent)
     sidebar_search_layout->setSpacing(0);
 
     search_edit_ = new QLineEdit(sidebar_search_row);
-    search_edit_->setObjectName(QStringLiteral("sidebarSearchEdit"));
+    search_edit_->setObjectName(QStringLiteral("searchInput"));
     search_edit_->setPlaceholderText(QStringLiteral("搜索联系人…"));
     sidebar_search_layout->addWidget(search_edit_);
     sidebar_layout->addWidget(sidebar_search_row);

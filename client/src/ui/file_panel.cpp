@@ -178,6 +178,7 @@ FilePanel::FilePanel(QWidget* parent)
     search_layout->setSpacing(0);
 
     search_edit_ = new QLineEdit(search_row);
+    search_edit_->setObjectName(QStringLiteral("fileSearchInput"));
     search_edit_->setPlaceholderText(QStringLiteral("搜索文件、回车确认…"));
     search_layout->addWidget(search_edit_);
     page_layout->addWidget(search_row);
@@ -290,7 +291,7 @@ FilePanel::FilePanel(QWidget* parent)
     footer_layout->addWidget(move_btn_);
 
     delete_btn_ = new QPushButton(QStringLiteral("删除"), footer);
-    delete_btn_->setObjectName(QStringLiteral("deleteBtn"));
+    delete_btn_->setObjectName(QStringLiteral("deleteBtnFile"));
     footer_layout->addWidget(delete_btn_);
     page_layout->addWidget(footer);
 

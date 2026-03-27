@@ -112,20 +112,6 @@ QWidget* createAvatarWidget(const QString& seed,
     return wrap;
 }
 
-QLabel* createStandardIconLabel(QStyle::StandardPixmap icon_type,
-                                int size,
-                                const QString& object_name,
-                                QWidget* parent = nullptr) {
-    auto* label = new QLabel(parent);
-    label->setObjectName(object_name);
-    label->setFixedSize(size, size);
-    label->setAlignment(Qt::AlignCenter);
-    if (parent) {
-        label->setPixmap(parent->style()->standardIcon(icon_type).pixmap(size, size));
-    }
-    return label;
-}
-
 QPushButton* createIconButton(const QString& text,
                               const QString& tooltip,
                               int size,
@@ -138,27 +124,18 @@ QPushButton* createIconButton(const QString& text,
     return button;
 }
 
-QPushButton* createNavButton(const QString& text, QWidget* parent = nullptr) {
-    auto* button = new QPushButton(text, parent);
-    button->setObjectName(QStringLiteral("navBtn"));
-    button->setCursor(Qt::PointingHandCursor);
-    button->setProperty("active", false);
-    return button;
-}
-
 QString formatConversationPreview(const QString& content, bool outgoing) {
+    Q_UNUSED(outgoing);
     QString simplified = content.simplified();
     if (simplified.isEmpty()) {
         simplified = QStringLiteral("[空消息]");
     }
 
-    const QString prefix = outgoing ? QStringLiteral("我: ")
-                                    : QStringLiteral("对方: ");
-    const int max_length = 24 - prefix.size();
-    if (simplified.size() > max_length) {
-        simplified = simplified.left(std::max(8, max_length)) + QStringLiteral("...");
+    constexpr int kMaxPreviewChars = 24;
+    if (simplified.size() > kMaxPreviewChars) {
+        simplified = simplified.left(kMaxPreviewChars) + QStringLiteral("...");
     }
-    return prefix + simplified;
+    return simplified;
 }
 
 QDateTime parseConversationTimestamp(const QString& timestamp) {
@@ -246,14 +223,64 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 void MainWindow::setupUi() {
     setWindowTitle(QStringLiteral("CloudVault - %1").arg(current_username_));
     setWindowIcon(QApplication::windowIcon());
-    resize(900, 580);
-    setMinimumSize(900, 580);
+    resize(1100, 700);
+    setMinimumSize(960, 620);
 
     auto* shell = new QWidget(this);
     shell->setObjectName(QStringLiteral("mainShell"));
-    auto* shell_layout = new QVBoxLayout(shell);
+    auto* shell_layout = new QHBoxLayout(shell);
     shell_layout->setContentsMargins(0, 0, 0, 0);
     shell_layout->setSpacing(0);
+
+    icon_bar_ = new QWidget(shell);
+    icon_bar_->setObjectName(QStringLiteral("iconBar"));
+    auto* icon_bar_layout = new QVBoxLayout(icon_bar_);
+    icon_bar_layout->setContentsMargins(0, 8, 0, 8);
+    icon_bar_layout->setSpacing(0);
+
+    auto* avatar_wrap = new QWidget(icon_bar_);
+    avatar_wrap->setFixedHeight(52);
+    auto* avatar_layout = new QHBoxLayout(avatar_wrap);
+    avatar_layout->setContentsMargins(0, 8, 0, 8);
+    avatar_layout->setSpacing(0);
+    avatar_tab_btn_ = new QPushButton(current_username_.left(1).toUpper(), avatar_wrap);
+    avatar_tab_btn_->setObjectName(QStringLiteral("iconAvatarBtn"));
+    avatar_tab_btn_->setProperty("variant", avatarVariantForSeed(current_username_));
+    avatar_tab_btn_->setCursor(Qt::PointingHandCursor);
+    avatar_tab_btn_->setFixedSize(36, 36);
+    avatar_layout->addWidget(avatar_tab_btn_, 0, Qt::AlignHCenter);
+
+    auto* avatar_dot = new QLabel(avatar_tab_btn_);
+    avatar_dot->setObjectName(QStringLiteral("iconAvatarDot"));
+    avatar_dot->setFixedSize(10, 10);
+    avatar_dot->move(24, 24);
+    avatar_dot->show();
+
+    icon_bar_layout->addWidget(avatar_wrap);
+    icon_bar_layout->addSpacing(16);
+
+    message_tab_btn_ = createIconButton(QStringLiteral("💬"), QStringLiteral("消息"), 36, icon_bar_);
+    message_tab_btn_->setObjectName(QStringLiteral("iconNavBtn"));
+    message_tab_btn_->setProperty("active", false);
+    icon_bar_layout->addWidget(message_tab_btn_, 0, Qt::AlignHCenter);
+
+    contact_tab_btn_ = createIconButton(QStringLiteral("👥"), QStringLiteral("联系人"), 36, icon_bar_);
+    contact_tab_btn_->setObjectName(QStringLiteral("iconNavBtn"));
+    contact_tab_btn_->setProperty("active", false);
+    icon_bar_layout->addWidget(contact_tab_btn_, 0, Qt::AlignHCenter);
+
+    file_tab_btn_ = createIconButton(QStringLiteral("📁"), QStringLiteral("文件"), 36, icon_bar_);
+    file_tab_btn_->setObjectName(QStringLiteral("iconNavBtn"));
+    file_tab_btn_->setProperty("active", false);
+    icon_bar_layout->addWidget(file_tab_btn_, 0, Qt::AlignHCenter);
+    icon_bar_layout->addStretch();
+
+    settings_tab_btn_ = createIconButton(QStringLiteral("⚙"), QStringLiteral("设置"), 36, icon_bar_);
+    settings_tab_btn_->setObjectName(QStringLiteral("iconNavBtn"));
+    settings_tab_btn_->setProperty("active", false);
+    icon_bar_layout->addWidget(settings_tab_btn_, 0, Qt::AlignHCenter);
+
+    shell_layout->addWidget(icon_bar_);
 
     content_root_ = new QWidget(shell);
     auto* content_root_layout = new QVBoxLayout(content_root_);
@@ -311,76 +338,28 @@ void MainWindow::setupUi() {
     content_splitter_->addWidget(center_panel);
     content_splitter_->addWidget(detail_panel_widget_);
     content_splitter_->setStretchFactor(1, 1);
-    content_splitter_->setSizes({260, 420, 220});
-
+    content_splitter_->setSizes({240, 560, 220});
     shell_layout->addWidget(content_root_, 1);
-
-    event_log_panel_ = new QFrame(shell);
-    event_log_panel_->setObjectName(QStringLiteral("eventLogPanel"));
-    auto* event_log_layout = new QVBoxLayout(event_log_panel_);
-    event_log_layout->setContentsMargins(0, 0, 0, 0);
-    event_log_layout->setSpacing(0);
-
-    auto* event_log_header = new QFrame(event_log_panel_);
-    event_log_header->setObjectName(QStringLiteral("eventLogHeader"));
-    event_log_header->setFixedHeight(36);
-    auto* event_log_header_layout = new QHBoxLayout(event_log_header);
-    event_log_header_layout->setContentsMargins(16, 0, 12, 0);
-    event_log_header_layout->setSpacing(8);
-
-    auto* event_log_title = new QLabel(QStringLiteral("● 事件日志"), event_log_header);
-    event_log_title->setObjectName(QStringLiteral("eventLogTitle"));
-    event_log_header_layout->addWidget(event_log_title);
-    event_log_header_layout->addStretch();
-
-    event_log_toggle_btn_ = new QToolButton(event_log_header);
-    event_log_toggle_btn_->setObjectName(QStringLiteral("eventLogToggleBtn"));
-    event_log_toggle_btn_->setText(QStringLiteral("折叠 ▲"));
-    event_log_toggle_btn_->setCursor(Qt::PointingHandCursor);
-    event_log_header_layout->addWidget(event_log_toggle_btn_);
-    event_log_layout->addWidget(event_log_header);
-
-    event_log_list_ = new QListWidget(event_log_panel_);
-    event_log_list_->setObjectName(QStringLiteral("eventLogList"));
-    event_log_list_->setSelectionMode(QAbstractItemView::NoSelection);
-    event_log_list_->setFocusPolicy(Qt::NoFocus);
-    event_log_list_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-    event_log_list_->setUniformItemSizes(true);
-    event_log_list_->setFixedHeight(108);
-    event_log_layout->addWidget(event_log_list_);
-    shell_layout->addWidget(event_log_panel_);
-
-    auto* nav_bar = new QFrame(shell);
-    nav_bar->setObjectName(QStringLiteral("navBar"));
-    nav_bar->setFixedHeight(52);
-    auto* nav_layout = new QHBoxLayout(nav_bar);
-    nav_layout->setContentsMargins(0, 0, 0, 0);
-    nav_layout->setSpacing(0);
-    message_tab_btn_ = createNavButton(QStringLiteral("消息"), nav_bar);
-    file_tab_btn_ = createNavButton(QStringLiteral("文件"), nav_bar);
-    profile_tab_btn_ = createNavButton(QStringLiteral("我"), nav_bar);
-    nav_layout->addWidget(message_tab_btn_);
-    nav_layout->addWidget(file_tab_btn_);
-    nav_layout->addWidget(profile_tab_btn_);
-    shell_layout->addWidget(nav_bar);
 
     setCentralWidget(shell);
     showChatEmptyState();
     hideTransferRow();
     resetFileActionSummary();
-    appendEventLog(QStringLiteral("已打开客户端，等待连接服务器"), QStringLiteral("●"));
+    refreshIconBarActiveState();
 }
 
 void MainWindow::connectSignals() {
     connect(message_tab_btn_, &QPushButton::clicked, this, [this] { switchMainTab(0); });
     connect(file_tab_btn_, &QPushButton::clicked, this, [this] { switchMainTab(1); });
-    connect(profile_tab_btn_, &QPushButton::clicked, this, [this] { switchMainTab(2); });
-    connect(event_log_toggle_btn_, &QToolButton::clicked, this, [this] {
-        event_log_expanded_ = !event_log_expanded_;
-        event_log_list_->setVisible(event_log_expanded_);
-        event_log_toggle_btn_->setText(event_log_expanded_
-            ? QStringLiteral("折叠 ▲")
-            : QStringLiteral("展开 ▼"));
+    connect(avatar_tab_btn_, &QPushButton::clicked, this, [this] { switchMainTab(2); });
+    connect(contact_tab_btn_, &QPushButton::clicked, this, [this] {
+        contact_tab_btn_->setProperty("active", true);
+        repolish(contact_tab_btn_);
+        openOnlineUserDialog();
+        refreshIconBarActiveState();
+    });
+    connect(settings_tab_btn_, &QPushButton::clicked, this, [this] {
+        QMessageBox::information(this, QStringLiteral("设置"), QStringLiteral("设置功能开发中。"));
     });
 
     connect(chat_panel_widget_, &ChatPanel::sendRequested,
@@ -400,8 +379,6 @@ void MainWindow::connectSignals() {
             this, &MainWindow::loadProfileDraft);
     connect(profile_panel_widget_, &ProfilePanel::logoutRequested,
             this, &MainWindow::logoutRequested);
-    connect(profile_panel_widget_, &ProfilePanel::logoutRequested,
-            this, [this] { appendEventLog(QStringLiteral("用户请求退出登录"), QStringLiteral("→")); });
 
     connect(file_panel_widget_, &FilePanel::backRequested, this, &MainWindow::openCurrentParentDirectory);
     connect(file_panel_widget_, &FilePanel::uploadRequested, this, &MainWindow::uploadFile);
@@ -409,11 +386,9 @@ void MainWindow::connectSignals() {
             this, [this] {
                 if (file_search_mode_ && !current_file_query_.isEmpty()) {
                     setFileStatus(QStringLiteral("正在刷新搜索结果…"));
-                    appendEventLog(QStringLiteral("刷新当前搜索结果"), QStringLiteral("→"));
                     file_service_.search(current_file_query_);
                 } else {
                     setFileStatus(QStringLiteral("正在刷新当前目录…"));
-                    appendEventLog(QStringLiteral("刷新文件列表 %1").arg(current_file_path_), QStringLiteral("→"));
                     file_service_.listFiles(current_file_path_);
                 }
             });
@@ -459,13 +434,6 @@ void MainWindow::connectSignals() {
                 applyConversationMessage(
                     message,
                     message.from != current_username_ && peer != active_chat_peer_);
-                appendEventLog(QStringLiteral("%1 %2: %3")
-                                   .arg(message.from == current_username_ ? QStringLiteral("发送给")
-                                                                          : QStringLiteral("收到来自"))
-                                   .arg(peer)
-                                   .arg(message.content.left(24)),
-                               message.from == current_username_ ? QStringLiteral("→")
-                                                                 : QStringLiteral("●"));
                 if (peer == active_chat_peer_) {
                     if (chat_panel_widget_) {
                         chat_panel_widget_->appendMessage(message, current_username_);
@@ -553,7 +521,6 @@ void MainWindow::connectSignals() {
     connect(&file_service_, &cloudvault::FileService::fileOperationSucceeded,
             this, [this](const QString& message) {
                 setFileStatus(message);
-                appendEventLog(message, QStringLiteral("✓"));
                 file_search_mode_ = false;
                 current_file_query_.clear();
                 if (file_panel_widget_) {
@@ -571,16 +538,11 @@ void MainWindow::connectSignals() {
                 showTransferRow(QStringLiteral("上传 %1").arg(filename), percent, true);
                 setFileStatus(QStringLiteral("正在上传 %1 · %2 / %3")
                                   .arg(filename, formatFileSize(sent), formatFileSize(total)));
-                if (percent == 0) {
-                    appendEventLog(QStringLiteral("开始上传文件 %1").arg(filename), QStringLiteral("↑"));
-                }
             });
     connect(&file_service_, &cloudvault::FileService::uploadFinished,
             this, [this](const QString& remote_path, const QString& message) {
                 showTransferRow(QStringLiteral("上传完成"), 100, !pending_upload_paths_.isEmpty());
                 setFileStatus(QStringLiteral("%1 · %2").arg(message, remote_path));
-                appendEventLog(QStringLiteral("文件上传完成 %1").arg(QFileInfo(remote_path).fileName()),
-                               QStringLiteral("✓"));
                 file_search_mode_ = false;
                 current_file_query_.clear();
                 if (file_panel_widget_) {
@@ -618,8 +580,6 @@ void MainWindow::connectSignals() {
             this, [this](const QString& local_path, const QString& message) {
                 showTransferRow(QStringLiteral("下载完成"), 100, false);
                 setFileStatus(QStringLiteral("%1 · %2").arg(message, local_path));
-                appendEventLog(QStringLiteral("文件下载完成 %1").arg(QFileInfo(local_path).fileName()),
-                               QStringLiteral("✓"));
                 QTimer::singleShot(1500, this, &MainWindow::hideTransferRow);
                 QMessageBox::information(this, QStringLiteral("下载完成"), local_path);
             });
@@ -674,14 +634,12 @@ void MainWindow::connectSignals() {
             if (!active_chat_peer_.isEmpty()) {
                 requestConversationSnapshot(active_chat_peer_);
             }
-            appendEventLog(QStringLiteral("快捷键刷新消息面板"), QStringLiteral("→"));
         } else if (center_stack_->currentIndex() == 1) {
             if (file_search_mode_ && !current_file_query_.isEmpty()) {
                 file_service_.search(current_file_query_);
             } else {
                 file_service_.listFiles(current_file_path_);
             }
-            appendEventLog(QStringLiteral("快捷键刷新文件面板"), QStringLiteral("→"));
         }
     });
 
@@ -1103,8 +1061,8 @@ void MainWindow::applySelectedFile() {
     if (file_panel_widget_) {
         file_panel_widget_->setSelectionSummary(
             name,
-            is_dir ? QStringLiteral("目录 · 双击可进入")
-                   : QStringLiteral("文件 · 可下载 / 分享 / 重命名 / 移动 / 删除"),
+            is_dir ? QStringLiteral("目录")
+                   : QStringLiteral("文件"),
             path);
     }
 }
@@ -1236,6 +1194,7 @@ void MainWindow::clearFileSearchIfNeeded(const QString& text) {
 }
 
 void MainWindow::switchMainTab(int index) {
+    active_main_tab_ = index;
     center_stack_->setCurrentIndex(index);
 
     const bool show_sidebar = (index != 2);
@@ -1262,19 +1221,12 @@ void MainWindow::switchMainTab(int index) {
                                        false);
         }
     }
-
-    for (int i = 0; i < 3; ++i) {
-        QPushButton* button = (i == 0) ? message_tab_btn_
-                              : (i == 1) ? file_tab_btn_
-                                         : profile_tab_btn_;
-        button->setProperty("active", i == index);
-        repolish(button);
-    }
+    refreshIconBarActiveState();
 
     if (index == 0) {
-        content_splitter_->setSizes({260, std::max(420, width() - 480), 220});
+        content_splitter_->setSizes({240, std::max(400, width() - 512), 220});
     } else if (index == 1) {
-        content_splitter_->setSizes({260, std::max(500, width() - 260), 0});
+        content_splitter_->setSizes({240, std::max(500, width() - 292), 0});
     } else {
         content_splitter_->setSizes({0, width(), 0});
     }
@@ -1304,7 +1256,6 @@ void MainWindow::openGroupListDialog() {
         if (chat_panel_widget_) {
             chat_panel_widget_->showGroupPlaceholder(group_name);
         }
-        appendEventLog(QStringLiteral("进入群聊 %1").arg(group_name), QStringLiteral("→"));
     });
     dialog.exec();
 }
@@ -1407,19 +1358,22 @@ void MainWindow::hideTransferRow() {
 }
 
 void MainWindow::appendEventLog(const QString& message, const QString& icon) {
-    if (!event_log_list_) {
+    Q_UNUSED(message);
+    Q_UNUSED(icon);
+}
+
+void MainWindow::refreshIconBarActiveState() {
+    if (!message_tab_btn_ || !contact_tab_btn_ || !file_tab_btn_ || !avatar_tab_btn_) {
         return;
     }
-
-    const QString timestamp = QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"));
-    auto* item = new QListWidgetItem(
-        QStringLiteral("[%1] %2 %3").arg(timestamp, icon, message),
-        event_log_list_);
-    item->setToolTip(message);
-    while (event_log_list_->count() > 50) {
-        delete event_log_list_->takeItem(0);
-    }
-    event_log_list_->scrollToBottom();
+    message_tab_btn_->setProperty("active", active_main_tab_ == 0);
+    contact_tab_btn_->setProperty("active", false);
+    file_tab_btn_->setProperty("active", active_main_tab_ == 1);
+    avatar_tab_btn_->setProperty("active", active_main_tab_ == 2);
+    repolish(message_tab_btn_);
+    repolish(contact_tab_btn_);
+    repolish(file_tab_btn_);
+    repolish(avatar_tab_btn_);
 }
 
 void MainWindow::showConnectionBanner(const QString& message) {

@@ -9,6 +9,7 @@
 
 class QLabel;
 class QLineEdit;
+class QFrame;
 
 class ProfilePanel : public QWidget {
     Q_OBJECT
@@ -27,6 +28,12 @@ signals:
     void logoutRequested();
 
 private:
+    void resizeEvent(QResizeEvent* event) override;
+    void updateAvatarGeometry();
+
+    QFrame* profile_card_ = nullptr;
+    QFrame* profile_banner_ = nullptr;
+    QLabel* profile_avatar_label_ = nullptr;
     QLabel* profile_name_label_ = nullptr;
     QLabel* profile_id_label_ = nullptr;
     QLineEdit* profile_nickname_edit_ = nullptr;

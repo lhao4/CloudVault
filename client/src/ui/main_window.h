@@ -24,10 +24,8 @@ class QLineEdit;
 class QListWidget;
 class QListWidgetItem;
 class QPushButton;
-class QToolButton;
 class QFrame;
 class QSplitter;
-class QTextEdit;
 class QVBoxLayout;
 class QStackedWidget;
 class ChatPanel;
@@ -110,6 +108,7 @@ private:
     void hideTransferRow();
     void loadProfileDraft();
     void saveProfileDraft();
+    void refreshIconBarActiveState();
 
     QString current_username_;
     cloudvault::ChatService&   chat_service_;
@@ -130,17 +129,15 @@ private:
     QSplitter* content_splitter_ = nullptr;
     QFrame* sidebar_panel_ = nullptr;
     QWidget* detail_panel_ = nullptr;
-    QVBoxLayout* content_layout_ = nullptr;
     QFrame* connection_banner_ = nullptr;
     QLabel* connection_banner_label_ = nullptr;
-    QFrame* event_log_panel_ = nullptr;
-    QListWidget* event_log_list_ = nullptr;
-    QToolButton* event_log_toggle_btn_ = nullptr;
-    bool event_log_expanded_ = true;
-
+    QWidget* icon_bar_ = nullptr;
+    QPushButton* avatar_tab_btn_ = nullptr;
     QPushButton* message_tab_btn_ = nullptr;
+    QPushButton* contact_tab_btn_ = nullptr;
     QPushButton* file_tab_btn_ = nullptr;
-    QPushButton* profile_tab_btn_ = nullptr;
+    QPushButton* settings_tab_btn_ = nullptr;
+    int active_main_tab_ = 0;
 
     QStackedWidget* center_stack_ = nullptr;
     SidebarPanel* sidebar_widget_ = nullptr;

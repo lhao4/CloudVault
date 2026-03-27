@@ -428,16 +428,16 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
     chat_text_layout->addWidget(status_label_);
     chat_top_layout->addLayout(chat_text_layout, 1);
 
-    group_list_button_ = createIconButton(QStringLiteral("组"),
+    group_list_button_ = createIconButton(QStringLiteral("📋"),
                                           QStringLiteral("群组列表"),
                                           30,
                                           chat_top_bar);
     chat_top_layout->addWidget(group_list_button_);
-    chat_top_layout->addWidget(createIconButton(QStringLiteral("附"),
+    chat_top_layout->addWidget(createIconButton(QStringLiteral("📎"),
                                                 QStringLiteral("附件"),
                                                 30,
                                                 chat_top_bar));
-    chat_top_layout->addWidget(createIconButton(QStringLiteral("…"),
+    chat_top_layout->addWidget(createIconButton(QStringLiteral("⋯"),
                                                 QStringLiteral("更多"),
                                                 30,
                                                 chat_top_bar));
@@ -453,32 +453,54 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
 
     auto* compose_bar = new QFrame(conversation_page);
     compose_bar->setObjectName(QStringLiteral("composeBar"));
-    auto* compose_layout = new QHBoxLayout(compose_bar);
-    compose_layout->setContentsMargins(12, 10, 12, 10);
-    compose_layout->setSpacing(8);
-    compose_layout->addWidget(createIconButton(QStringLiteral("表"),
-                                               QStringLiteral("表情"),
-                                               34,
-                                               compose_bar));
-    compose_layout->addWidget(createIconButton(QStringLiteral("附"),
-                                               QStringLiteral("发送文件"),
-                                               34,
-                                               compose_bar));
+    auto* compose_layout = new QVBoxLayout(compose_bar);
+    compose_layout->setContentsMargins(0, 0, 0, 0);
+    compose_layout->setSpacing(0);
+
+    auto* input_toolbar = new QFrame(compose_bar);
+    input_toolbar->setObjectName(QStringLiteral("inputToolbar"));
+    input_toolbar->setFixedHeight(36);
+    auto* input_toolbar_layout = new QHBoxLayout(input_toolbar);
+    input_toolbar_layout->setContentsMargins(16, 0, 16, 0);
+    input_toolbar_layout->setSpacing(8);
+    input_toolbar_layout->addWidget(createIconButton(QStringLiteral("😊"),
+                                                     QStringLiteral("表情"),
+                                                     24,
+                                                     input_toolbar));
+    input_toolbar_layout->addWidget(createIconButton(QStringLiteral("📎"),
+                                                     QStringLiteral("发送文件"),
+                                                     24,
+                                                     input_toolbar));
+    input_toolbar_layout->addStretch();
+    compose_layout->addWidget(input_toolbar);
 
     auto* send_text_edit = new SendTextEdit(compose_bar);
     send_text_edit->setObjectName(QStringLiteral("messageInput"));
     send_text_edit->setPlaceholderText(QStringLiteral("输入消息…"));
+    send_text_edit->setMinimumHeight(80);
     message_input_ = send_text_edit;
     compose_layout->addWidget(message_input_, 1);
 
-    send_button_ = new QPushButton(QStringLiteral("➤"), compose_bar);
-    send_button_->setObjectName(QStringLiteral("primaryBtn"));
+    auto* input_send_bar = new QFrame(compose_bar);
+    input_send_bar->setObjectName(QStringLiteral("inputSendBar"));
+    input_send_bar->setFixedHeight(44);
+    auto* input_send_layout = new QHBoxLayout(input_send_bar);
+    input_send_layout->setContentsMargins(16, 0, 16, 0);
+    input_send_layout->setSpacing(8);
+    input_send_layout->addStretch();
+
+    send_button_ = new QPushButton(QStringLiteral("发送"), input_send_bar);
+    send_button_->setObjectName(QStringLiteral("sendBtn"));
     send_button_->setCursor(Qt::PointingHandCursor);
-    send_button_->setFixedSize(44, 44);
-    compose_layout->addWidget(send_button_);
+    send_button_->setFixedSize(88, 32);
+    input_send_layout->addWidget(send_button_);
+    compose_layout->addWidget(input_send_bar);
+
     conversation_layout->addWidget(compose_bar);
 
     connect(send_text_edit, &SendTextEdit::submitRequested,
+            this, &ChatPanel::sendRequested);
+    connect(send_button_, &QPushButton::clicked,
             this, &ChatPanel::sendRequested);
     connect(group_list_button_, &QPushButton::clicked,
             this, &ChatPanel::groupListRequested);

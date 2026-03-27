@@ -60,7 +60,6 @@ void App::showMainWindow(const QString& username) {
     main_window_->raise();
     main_window_->activateWindow();
     main_window_->hideConnectionBanner();
-    main_window_->appendEventLog(QStringLiteral("用户 %1 登录成功").arg(username), QStringLiteral("✓"));
     friend_service_.flushFriends();
 }
 
@@ -91,7 +90,6 @@ void App::handleSocketConnected() {
     reconnect_pending_ = false;
     if (main_window_) {
         main_window_->hideConnectionBanner();
-        main_window_->appendEventLog(QStringLiteral("已连接至服务器"), QStringLiteral("✓"));
     }
 }
 
@@ -101,7 +99,6 @@ void App::handleSocketDisconnected() {
     }
 
     main_window_->showConnectionBanner(QStringLiteral("已断开连接，正在重连…"));
-    main_window_->appendEventLog(QStringLiteral("连接已断开，3 秒后重连"), QStringLiteral("●"));
 
     if (reconnect_pending_ || !login_window_ || !login_window_->hasServerConfig()) {
         return;
@@ -123,5 +120,4 @@ void App::handleSocketError(const QString& message) {
     }
 
     main_window_->showConnectionBanner(QStringLiteral("网络异常：%1").arg(message));
-    main_window_->appendEventLog(QStringLiteral("网络错误：%1").arg(message), QStringLiteral("●"));
 }
