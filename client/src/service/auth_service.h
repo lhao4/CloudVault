@@ -19,37 +19,73 @@
 
 namespace cloudvault {
 
+/**
+ * @brief 认证业务服务。
+ *
+ * 封装注册、登录、登出协议发送与响应解析，
+ * 对 UI 层暴露统一信号接口。
+ */
 class AuthService : public QObject {
     Q_OBJECT
 
 public:
+    /**
+     * @brief 构造认证服务。
+     * @param client TCP 客户端引用。
+     * @param router 响应路由器引用。
+     * @param parent Qt 父对象。
+     */
     explicit AuthService(TcpClient& client,
                          ResponseRouter& router,
                          QObject* parent = nullptr);
 
-    // 发起注册请求（在 Qt 主线程调用）
+    /**
+     * @brief 发起注册请求。
+     * @param username 用户名。
+     * @param password 明文密码（内部会做摘要处理）。
+     */
     void registerUser(const QString& username, const QString& password);
 
-    // 发起登录请求（在 Qt 主线程调用）
+    /**
+     * @brief 发起登录请求。
+     * @param username 用户名。
+     * @param password 明文密码（内部会做摘要处理）。
+     */
     void login(const QString& username, const QString& password);
 
-    // 主动登出
+    /**
+     * @brief 主动发送登出请求。
+     */
     void logout();
 
 signals:
-    // 注册结果
+    /// @brief 注册成功。
     void registerSuccess();
+    /// @brief 注册失败。
     void registerFailed(const QString& reason);
 
-    // 登录结果
+    /// @brief 登录成功。
     void loginSuccess(int userId);
+    /// @brief 登录失败。
     void loginFailed(const QString& reason);
 
 private:
+    /**
+     * @brief 处理注册响应。
+     * @param hdr 响应头。
+     * @param body 响应体。
+     */
     void onRegisterResponse(const PDUHeader& hdr, const std::vector<uint8_t>& body);
+    /**
+     * @brief 处理登录响应。
+     * @param hdr 响应头。
+     * @param body 响应体。
+     */
     void onLoginResponse   (const PDUHeader& hdr, const std::vector<uint8_t>& body);
 
+    /// @brief TCP 客户端引用。
     TcpClient&      client_;
+    /// @brief 响应路由器引用。
     ResponseRouter& router_;
 };
 
