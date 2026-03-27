@@ -10,6 +10,7 @@
 #include "ui/file_panel.h"
 #include "ui/group_list_dialog.h"
 #include "ui/online_user_dialog.h"
+#include "ui/profile_panel.h"
 #include "ui/sidebar_panel.h"
 #include "ui/share_file_dialog.h"
 
@@ -299,87 +300,8 @@ void MainWindow::setupUi() {
     }
 
     {
-        auto* page = new QWidget(center_stack_);
-        page->setObjectName(QStringLiteral("profilePage"));
-        auto* page_layout = new QVBoxLayout(page);
-        page_layout->setContentsMargins(0, 0, 0, 0);
-        page_layout->setSpacing(0);
-        page_layout->addStretch();
-
-        auto* card_row = new QHBoxLayout();
-        card_row->setContentsMargins(0, 0, 0, 0);
-        card_row->setSpacing(0);
-        card_row->addStretch();
-
-        auto* card = new QFrame(page);
-        card->setObjectName(QStringLiteral("profileCard"));
-        card->setFixedWidth(360);
-        applyShadow(card, 32, 6, 20);
-        auto* card_layout = new QVBoxLayout(card);
-        card_layout->setContentsMargins(32, 32, 32, 32);
-        card_layout->setSpacing(12);
-
-        auto* profile_avatar = new QLabel(card);
-        prepareAvatarBadge(profile_avatar, current_username_, 64);
-        card_layout->addWidget(profile_avatar, 0, Qt::AlignHCenter);
-
-        profile_name_label_ = new QLabel(current_username_, card);
-        profile_name_label_->setObjectName(QStringLiteral("profileName"));
-        profile_name_label_->setAlignment(Qt::AlignCenter);
-        card_layout->addWidget(profile_name_label_);
-
-        profile_id_label_ = new QLabel(QStringLiteral("@%1").arg(current_username_), card);
-        profile_id_label_->setObjectName(QStringLiteral("profileId"));
-        profile_id_label_->setAlignment(Qt::AlignCenter);
-        card_layout->addWidget(profile_id_label_);
-
-        auto* divider_top = new QFrame(card);
-        divider_top->setFrameShape(QFrame::HLine);
-        card_layout->addWidget(divider_top);
-
-        auto* nickname_label = new QLabel(QStringLiteral("昵称"), card);
-        nickname_label->setObjectName(QStringLiteral("fieldLabel"));
-        card_layout->addWidget(nickname_label);
-
-        profile_nickname_edit_ = new QLineEdit(card);
-        profile_nickname_edit_->setPlaceholderText(QStringLiteral("请输入昵称"));
-        card_layout->addWidget(profile_nickname_edit_);
-
-        auto* signature_label = new QLabel(QStringLiteral("个性签名"), card);
-        signature_label->setObjectName(QStringLiteral("fieldLabel"));
-        card_layout->addWidget(signature_label);
-
-        profile_signature_edit_ = new QLineEdit(card);
-        profile_signature_edit_->setPlaceholderText(QStringLiteral("写点什么介绍自己"));
-        card_layout->addWidget(profile_signature_edit_);
-
-        auto* action_row = new QHBoxLayout();
-        action_row->setSpacing(10);
-        auto* save_btn = new QPushButton(QStringLiteral("保存"), card);
-        save_btn->setObjectName(QStringLiteral("primaryBtn"));
-        auto* cancel_btn = new QPushButton(QStringLiteral("取消"), card);
-        cancel_btn->setObjectName(QStringLiteral("secondaryBtn"));
-        action_row->addWidget(save_btn);
-        action_row->addWidget(cancel_btn);
-        card_layout->addLayout(action_row);
-
-        auto* divider_bottom = new QFrame(card);
-        divider_bottom->setFrameShape(QFrame::HLine);
-        card_layout->addWidget(divider_bottom);
-
-        logout_btn_ = new QPushButton(QStringLiteral("退出登录"), card);
-        logout_btn_->setObjectName(QStringLiteral("logoutBtn"));
-        card_layout->addWidget(logout_btn_);
-
-        connect(save_btn, &QPushButton::clicked, this, &MainWindow::saveProfileDraft);
-        connect(cancel_btn, &QPushButton::clicked, this, &MainWindow::loadProfileDraft);
-
-        card_row->addWidget(card);
-        card_row->addStretch();
-        page_layout->addLayout(card_row);
-        page_layout->addStretch();
-
-        center_stack_->addWidget(page);
+        profile_panel_widget_ = new ProfilePanel(current_username_, center_stack_);
+        center_stack_->addWidget(profile_panel_widget_);
     }
 
     detail_panel_widget_ = new DetailPanel(current_username_, content_splitter_);
@@ -472,10 +394,14 @@ void MainWindow::connectSignals() {
     connect(sidebar_widget_, &SidebarPanel::actionRequested,
             this, &MainWindow::openOnlineUserDialog);
 
-    connect(logout_btn_, &QPushButton::clicked, this, &MainWindow::logoutRequested);
-    connect(logout_btn_, &QPushButton::clicked, this, [this] {
-        appendEventLog(QStringLiteral("用户请求退出登录"), QStringLiteral("→"));
-    });
+    connect(profile_panel_widget_, &ProfilePanel::saveRequested,
+            this, &MainWindow::saveProfileDraft);
+    connect(profile_panel_widget_, &ProfilePanel::cancelRequested,
+            this, &MainWindow::loadProfileDraft);
+    connect(profile_panel_widget_, &ProfilePanel::logoutRequested,
+            this, &MainWindow::logoutRequested);
+    connect(profile_panel_widget_, &ProfilePanel::logoutRequested,
+            this, [this] { appendEventLog(QStringLiteral("用户请求退出登录"), QStringLiteral("→")); });
 
     connect(file_panel_widget_, &FilePanel::backRequested, this, &MainWindow::openCurrentParentDirectory);
     connect(file_panel_widget_, &FilePanel::uploadRequested, this, &MainWindow::uploadFile);
@@ -497,7 +423,7 @@ void MainWindow::connectSignals() {
     connect(file_panel_widget_, &FilePanel::selectionChanged, this, &MainWindow::applySelectedFile);
     connect(file_panel_widget_, &FilePanel::itemActivated,
             this, [this] {
-                if (!selectedFileIsDir()) {
+                if (!(file_panel_widget_ ? file_panel_widget_->currentIsDir() : false)) {
                     return;
                 }
                 file_search_mode_ = false;
@@ -505,7 +431,7 @@ void MainWindow::connectSignals() {
                 if (file_panel_widget_) {
                     file_panel_widget_->clearSearch();
                 }
-                navigateToFilePath(selectedFilePath());
+                navigateToFilePath(file_panel_widget_ ? file_panel_widget_->currentPath() : QString());
             });
     connect(file_panel_widget_, &FilePanel::renameRequested, this, &MainWindow::renameSelectedFile);
     connect(file_panel_widget_, &FilePanel::moveRequested, this, &MainWindow::moveSelectedFile);
@@ -544,7 +470,7 @@ void MainWindow::connectSignals() {
                     if (chat_panel_widget_) {
                         chat_panel_widget_->appendMessage(message, current_username_);
                     }
-                    showChatConversation(peer, selectedFriendOnline());
+                    showChatConversation(peer, sidebar_widget_ ? sidebar_widget_->currentOnline() : false);
                 }
             });
     connect(&chat_service_, &cloudvault::ChatService::historyLoaded,
@@ -570,7 +496,7 @@ void MainWindow::connectSignals() {
                     }
                 }
                 saveConversationReadAt(peer, latest_incoming);
-                showChatConversation(peer, selectedFriendOnline());
+                showChatConversation(peer, sidebar_widget_ ? sidebar_widget_->currentOnline() : false);
             });
     connect(&chat_service_, &cloudvault::ChatService::historyLoadFailed,
             this, [this](const QString& peer, const QString& reason) {
@@ -578,7 +504,7 @@ void MainWindow::connectSignals() {
                 if (peer != active_chat_peer_) {
                     return;
                 }
-                showChatConversation(peer, selectedFriendOnline());
+                showChatConversation(peer, sidebar_widget_ ? sidebar_widget_->currentOnline() : false);
                 if (chat_panel_widget_) {
                     chat_panel_widget_->setConversationStatus(reason);
                 }
@@ -966,7 +892,7 @@ void MainWindow::refreshFriendList(const QList<QPair<QString, bool>>& friends) {
 void MainWindow::filterFriendList(const QString& keyword) {
     const QString current = !active_chat_peer_.isEmpty()
         ? active_chat_peer_
-        : selectedFriend();
+        : (sidebar_widget_ ? sidebar_widget_->currentUsername() : QString());
     const QString trimmed = keyword.trimmed();
     QList<QPair<QString, bool>> ordered_friends = friends_;
     std::sort(ordered_friends.begin(), ordered_friends.end(),
@@ -1031,7 +957,7 @@ void MainWindow::filterFriendList(const QString& keyword) {
 
     updateContactSelectionState();
 
-    if (selectedFriend() != current) {
+    if ((sidebar_widget_ ? sidebar_widget_->currentUsername() : QString()) != current) {
         applySelectedFriend();
     }
 }
@@ -1045,13 +971,13 @@ void MainWindow::updateContactSelectionState() {
 void MainWindow::applySelectedFriend() {
     updateContactSelectionState();
 
-    const QString username = selectedFriend();
+    const QString username = sidebar_widget_ ? sidebar_widget_->currentUsername() : QString();
     if (username.isEmpty()) {
         showChatEmptyState();
         return;
     }
 
-    const bool online = selectedFriendOnline();
+    const bool online = sidebar_widget_ ? sidebar_widget_->currentOnline() : false;
     active_chat_peer_ = username;
     clearConversationUnread(username);
     showChatConversation(username, online);
@@ -1088,7 +1014,7 @@ void MainWindow::sendCurrentMessage() {
     if (chat_panel_widget_) {
         chat_panel_widget_->clearInput();
     }
-    showChatConversation(active_chat_peer_, selectedFriendOnline());
+    showChatConversation(active_chat_peer_, sidebar_widget_ ? sidebar_widget_->currentOnline() : false);
     QTimer::singleShot(120, this, [this, peer = active_chat_peer_] {
         if (!peer.isEmpty() && peer == active_chat_peer_) {
             requestConversationSnapshot(peer);
@@ -1157,7 +1083,7 @@ void MainWindow::updateFileSelectionState() {
     }
 
     const bool has_selection = file_panel_widget_ && file_panel_widget_->hasSelection();
-    const bool is_file = has_selection && !selectedFileIsDir();
+    const bool is_file = has_selection && !(file_panel_widget_ ? file_panel_widget_->currentIsDir() : false);
     if (file_panel_widget_) {
         file_panel_widget_->setActionButtonsEnabled(has_selection, is_file);
     }
@@ -1166,13 +1092,13 @@ void MainWindow::updateFileSelectionState() {
 void MainWindow::applySelectedFile() {
     updateFileSelectionState();
 
-    const QString path = selectedFilePath();
+    const QString path = file_panel_widget_ ? file_panel_widget_->currentPath() : QString();
     if (path.isEmpty()) {
         resetFileActionSummary();
         return;
     }
 
-    const bool is_dir = selectedFileIsDir();
+    const bool is_dir = file_panel_widget_ ? file_panel_widget_->currentIsDir() : false;
     const QString name = file_panel_widget_ ? file_panel_widget_->currentName() : QString();
     if (file_panel_widget_) {
         file_panel_widget_->setSelectionSummary(
@@ -1228,7 +1154,7 @@ void MainWindow::createDirectory() {
 }
 
 void MainWindow::renameSelectedFile() {
-    const QString path = selectedFilePath();
+    const QString path = file_panel_widget_ ? file_panel_widget_->currentPath() : QString();
     if (path.isEmpty()) {
         return;
     }
@@ -1248,7 +1174,7 @@ void MainWindow::renameSelectedFile() {
 }
 
 void MainWindow::moveSelectedFile() {
-    const QString path = selectedFilePath();
+    const QString path = file_panel_widget_ ? file_panel_widget_->currentPath() : QString();
     if (path.isEmpty()) {
         return;
     }
@@ -1267,7 +1193,7 @@ void MainWindow::moveSelectedFile() {
 }
 
 void MainWindow::deleteSelectedFile() {
-    const QString path = selectedFilePath();
+    const QString path = file_panel_widget_ ? file_panel_widget_->currentPath() : QString();
     if (path.isEmpty()) {
         return;
     }
@@ -1384,8 +1310,8 @@ void MainWindow::openGroupListDialog() {
 }
 
 void MainWindow::openShareFileDialog() {
-    const QString path = selectedFilePath();
-    if (path.isEmpty() || selectedFileIsDir()) {
+    const QString path = file_panel_widget_ ? file_panel_widget_->currentPath() : QString();
+    if (path.isEmpty() || (file_panel_widget_ ? file_panel_widget_->currentIsDir() : false)) {
         return;
     }
 
@@ -1417,8 +1343,8 @@ void MainWindow::uploadFile() {
 }
 
 void MainWindow::downloadSelectedFile() {
-    const QString remote_path = selectedFilePath();
-    if (remote_path.isEmpty() || selectedFileIsDir()) {
+    const QString remote_path = file_panel_widget_ ? file_panel_widget_->currentPath() : QString();
+    if (remote_path.isEmpty() || (file_panel_widget_ ? file_panel_widget_->currentIsDir() : false)) {
         return;
     }
 
@@ -1517,14 +1443,18 @@ void MainWindow::loadProfileDraft() {
     const QString signature = settings.value(QStringLiteral("signature")).toString();
     settings.endGroup();
 
-    profile_nickname_edit_->setText(nickname);
-    profile_signature_edit_->setText(signature);
-    profile_name_label_->setText(nickname.trimmed().isEmpty() ? current_username_ : nickname.trimmed());
+    if (profile_panel_widget_) {
+        profile_panel_widget_->setDraftValues(nickname, signature);
+        profile_panel_widget_->setDisplayName(
+            nickname.trimmed().isEmpty() ? current_username_ : nickname.trimmed());
+    }
 }
 
 void MainWindow::saveProfileDraft() {
-    const QString nickname = profile_nickname_edit_->text().trimmed();
-    const QString signature = profile_signature_edit_->text().trimmed();
+    const QString nickname = profile_panel_widget_ ? profile_panel_widget_->nicknameText().trimmed()
+                                                   : QString();
+    const QString signature = profile_panel_widget_ ? profile_panel_widget_->signatureText().trimmed()
+                                                    : QString();
 
     QSettings settings;
     settings.beginGroup(QStringLiteral("profile/%1").arg(current_username_));
@@ -1532,21 +1462,7 @@ void MainWindow::saveProfileDraft() {
     settings.setValue(QStringLiteral("signature"), signature);
     settings.endGroup();
 
-    profile_name_label_->setText(nickname.isEmpty() ? current_username_ : nickname);
-}
-
-QString MainWindow::selectedFriend() const {
-    return sidebar_widget_ ? sidebar_widget_->currentUsername() : QString();
-}
-
-bool MainWindow::selectedFriendOnline() const {
-    return sidebar_widget_ ? sidebar_widget_->currentOnline() : false;
-}
-
-QString MainWindow::selectedFilePath() const {
-    return file_panel_widget_ ? file_panel_widget_->currentPath() : QString();
-}
-
-bool MainWindow::selectedFileIsDir() const {
-    return file_panel_widget_ ? file_panel_widget_->currentIsDir() : false;
+    if (profile_panel_widget_) {
+        profile_panel_widget_->setDisplayName(nickname.isEmpty() ? current_username_ : nickname);
+    }
 }

@@ -34,6 +34,7 @@ class ChatPanel;
 class FilePanel;
 class DetailPanel;
 class SidebarPanel;
+class ProfilePanel;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -109,10 +110,6 @@ private:
     void hideTransferRow();
     void loadProfileDraft();
     void saveProfileDraft();
-    QString selectedFriend() const;
-    bool selectedFriendOnline() const;
-    QString selectedFilePath() const;
-    bool selectedFileIsDir() const;
 
     QString current_username_;
     cloudvault::ChatService&   chat_service_;
@@ -150,11 +147,6 @@ private:
     ChatPanel* chat_panel_widget_ = nullptr;
     FilePanel* file_panel_widget_ = nullptr;
     DetailPanel* detail_panel_widget_ = nullptr;
-
-    QLabel* profile_name_label_ = nullptr;
-    QLabel* profile_id_label_ = nullptr;
-    QLineEdit* profile_nickname_edit_ = nullptr;
-    QLineEdit* profile_signature_edit_ = nullptr;
-    QPushButton* logout_btn_ = nullptr;
+    ProfilePanel* profile_panel_widget_ = nullptr;
     QStringList pending_upload_paths_;
 };
