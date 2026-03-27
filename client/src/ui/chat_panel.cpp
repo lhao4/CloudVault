@@ -608,6 +608,16 @@ void ChatPanel::rebuildMessages(const QList<cloudvault::ChatMessage>& messages,
     message_list_->scrollToBottom();
 }
 
+QString ChatPanel::inputText() const {
+    return message_input_ ? message_input_->toPlainText() : QString();
+}
+
+void ChatPanel::clearInput() {
+    if (message_input_) {
+        message_input_->clear();
+    }
+}
+
 void ChatPanel::appendDateDividerIfNeeded(const QString& timestamp) {
     if (!message_list_) {
         return;
@@ -642,8 +652,5 @@ QLabel* ChatPanel::statusLabel() const { return status_label_; }
 QLabel* ChatPanel::groupTitleLabel() const { return group_title_label_; }
 QLabel* ChatPanel::groupStatusLabel() const { return group_status_label_; }
 QListWidget* ChatPanel::messageList() const { return message_list_; }
-QTextEdit* ChatPanel::messageInput() const { return message_input_; }
-QPushButton* ChatPanel::sendButton() const { return send_button_; }
-QPushButton* ChatPanel::groupListButton() const { return group_list_button_; }
 
 #include "chat_panel.moc"

@@ -29,6 +29,8 @@ public:
     void appendMessage(const cloudvault::ChatMessage& message, const QString& current_username);
     void rebuildMessages(const QList<cloudvault::ChatMessage>& messages,
                          const QString& current_username);
+    QString inputText() const;
+    void clearInput();
 
     QStackedWidget* stack() const;
     QLabel* avatarLabel() const;
@@ -37,9 +39,6 @@ public:
     QLabel* groupTitleLabel() const;
     QLabel* groupStatusLabel() const;
     QListWidget* messageList() const;
-    QTextEdit* messageInput() const;
-    QPushButton* sendButton() const;
-    QPushButton* groupListButton() const;
 
 signals:
     void sendRequested();

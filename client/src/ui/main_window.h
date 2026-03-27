@@ -33,6 +33,7 @@ class QStackedWidget;
 class ChatPanel;
 class FilePanel;
 class DetailPanel;
+class SidebarPanel;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -140,21 +141,16 @@ private:
     QToolButton* event_log_toggle_btn_ = nullptr;
     bool event_log_expanded_ = true;
 
-    QLabel* sidebar_title_label_ = nullptr;
-    QLineEdit* contact_search_edit_ = nullptr;
-    QListWidget* contact_list_ = nullptr;
-    QPushButton* sidebar_action_btn_ = nullptr;
-
     QPushButton* message_tab_btn_ = nullptr;
     QPushButton* file_tab_btn_ = nullptr;
     QPushButton* profile_tab_btn_ = nullptr;
 
     QStackedWidget* center_stack_ = nullptr;
+    SidebarPanel* sidebar_widget_ = nullptr;
     ChatPanel* chat_panel_widget_ = nullptr;
     FilePanel* file_panel_widget_ = nullptr;
     DetailPanel* detail_panel_widget_ = nullptr;
 
-    QPushButton* group_list_btn_ = nullptr;
     QListWidget* message_list_ = nullptr;
     QLabel* file_path_label_ = nullptr;
     QLineEdit* file_search_edit_ = nullptr;
@@ -169,8 +165,6 @@ private:
     QLabel* profile_id_label_ = nullptr;
     QLineEdit* profile_nickname_edit_ = nullptr;
     QLineEdit* profile_signature_edit_ = nullptr;
-    QTextEdit* message_input_ = nullptr;
-    QPushButton* send_btn_ = nullptr;
     QPushButton* logout_btn_ = nullptr;
     QPushButton* file_share_btn_ = nullptr;
     QPushButton* file_download_btn_ = nullptr;

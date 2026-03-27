@@ -10,6 +10,7 @@
 #include "ui/file_panel.h"
 #include "ui/group_list_dialog.h"
 #include "ui/online_user_dialog.h"
+#include "ui/sidebar_panel.h"
 #include "ui/share_file_dialog.h"
 
 #include <algorithm>
@@ -65,17 +66,6 @@ void repolish(QWidget* widget) {
     widget->style()->unpolish(widget);
     widget->style()->polish(widget);
     widget->update();
-}
-
-void allowViewToHandleMouseEvents(QWidget* widget) {
-    if (!widget) {
-        return;
-    }
-    widget->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-    const auto children = widget->findChildren<QWidget*>();
-    for (QWidget* child : children) {
-        child->setAttribute(Qt::WA_TransparentForMouseEvents, true);
-    }
 }
 
 void applyShadow(QWidget* widget, int blur = 40, int offset_y = 8, int alpha = 30) {
@@ -223,72 +213,6 @@ QString formatFileSize(quint64 size) {
         .arg(units[unit_index]);
 }
 
-QWidget* createContactItemWidget(const QString& username,
-                                 const QString& preview,
-                                 const QString& time,
-                                 int unread,
-                                 bool online,
-                                 bool selected,
-                                 QWidget* parent = nullptr) {
-    auto* frame = new QFrame(parent);
-    frame->setObjectName(QStringLiteral("contactCard"));
-    frame->setProperty("selected", selected);
-
-    auto* root = new QHBoxLayout(frame);
-    root->setContentsMargins(0, 0, 0, 0);
-    root->setSpacing(0);
-
-    auto* accent = new QFrame(frame);
-    accent->setObjectName(QStringLiteral("contactAccent"));
-    accent->setProperty("selected", selected);
-    accent->setFixedWidth(2);
-    root->addWidget(accent);
-
-    auto* body = new QWidget(frame);
-    auto* body_layout = new QHBoxLayout(body);
-    body_layout->setContentsMargins(10, 0, 12, 0);
-    body_layout->setSpacing(10);
-
-    body_layout->addWidget(createAvatarWidget(username, 40, online, body), 0, Qt::AlignVCenter);
-
-    auto* text_layout = new QVBoxLayout();
-    text_layout->setContentsMargins(0, 10, 0, 10);
-    text_layout->setSpacing(2);
-
-    auto* name_label = new QLabel(username, body);
-    name_label->setObjectName(QStringLiteral("contactNameLabel"));
-    text_layout->addWidget(name_label);
-
-    auto* preview_label = new QLabel(preview, body);
-    preview_label->setObjectName(QStringLiteral("contactPreviewLabel"));
-    preview_label->setWordWrap(false);
-    text_layout->addWidget(preview_label);
-    body_layout->addLayout(text_layout, 1);
-
-    auto* meta_layout = new QVBoxLayout();
-    meta_layout->setContentsMargins(0, 10, 0, 10);
-    meta_layout->setSpacing(6);
-
-    auto* time_label = new QLabel(time, body);
-    time_label->setObjectName(QStringLiteral("contactTimeLabel"));
-    time_label->setAlignment(Qt::AlignRight);
-    meta_layout->addWidget(time_label);
-
-    if (unread > 0) {
-        auto* badge = new QLabel(QString::number(unread), body);
-        badge->setObjectName(QStringLiteral("contactBadgeLabel"));
-        badge->setAlignment(Qt::AlignCenter);
-        meta_layout->addWidget(badge, 0, Qt::AlignRight);
-    } else {
-        meta_layout->addStretch();
-    }
-
-    body_layout->addLayout(meta_layout);
-    root->addWidget(body, 1);
-    allowViewToHandleMouseEvents(frame);
-    return frame;
-}
-
 } // namespace
 
 MainWindow::MainWindow(const QString& username,
@@ -352,50 +276,8 @@ void MainWindow::setupUi() {
     content_splitter_->setHandleWidth(1);
     content_root_layout->addWidget(content_splitter_, 1);
 
-    sidebar_panel_ = new QFrame(content_splitter_);
-    sidebar_panel_->setObjectName(QStringLiteral("sidebarPanel"));
-    sidebar_panel_->setMinimumWidth(260);
-    sidebar_panel_->setMaximumWidth(260);
-    auto* sidebar_layout = new QVBoxLayout(sidebar_panel_);
-    sidebar_layout->setContentsMargins(0, 0, 0, 0);
-    sidebar_layout->setSpacing(0);
-
-    auto* sidebar_header = new QFrame(sidebar_panel_);
-    sidebar_header->setObjectName(QStringLiteral("sidebarHeader"));
-    sidebar_header->setFixedHeight(56);
-    auto* sidebar_header_layout = new QHBoxLayout(sidebar_header);
-    sidebar_header_layout->setContentsMargins(16, 0, 12, 0);
-    sidebar_header_layout->setSpacing(8);
-
-    sidebar_title_label_ = new QLabel(QStringLiteral("消息"), sidebar_header);
-    sidebar_title_label_->setObjectName(QStringLiteral("sidebarTitle"));
-    sidebar_header_layout->addWidget(sidebar_title_label_);
-    sidebar_header_layout->addStretch();
-    sidebar_action_btn_ = createIconButton(QStringLiteral("群"),
-                                           QStringLiteral("查看在线用户"),
-                                           30,
-                                           sidebar_header);
-    sidebar_header_layout->addWidget(sidebar_action_btn_);
-    sidebar_layout->addWidget(sidebar_header);
-
-    auto* sidebar_search_row = new QFrame(sidebar_panel_);
-    sidebar_search_row->setObjectName(QStringLiteral("sidebarSearchRow"));
-    sidebar_search_row->setFixedHeight(48);
-    auto* sidebar_search_layout = new QHBoxLayout(sidebar_search_row);
-    sidebar_search_layout->setContentsMargins(12, 8, 12, 8);
-    sidebar_search_layout->setSpacing(0);
-
-    contact_search_edit_ = new QLineEdit(sidebar_search_row);
-    contact_search_edit_->setObjectName(QStringLiteral("sidebarSearchEdit"));
-    contact_search_edit_->setPlaceholderText(QStringLiteral("搜索联系人…"));
-    sidebar_search_layout->addWidget(contact_search_edit_);
-    sidebar_layout->addWidget(sidebar_search_row);
-
-    contact_list_ = new QListWidget(sidebar_panel_);
-    contact_list_->setObjectName(QStringLiteral("contactList"));
-    contact_list_->setSpacing(0);
-    contact_list_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-    sidebar_layout->addWidget(contact_list_, 1);
+    sidebar_widget_ = new SidebarPanel(content_splitter_);
+    sidebar_panel_ = sidebar_widget_;
 
     auto* center_panel = new QWidget(content_splitter_);
     center_panel->setObjectName(QStringLiteral("centerPanel"));
@@ -409,9 +291,6 @@ void MainWindow::setupUi() {
     {
         chat_panel_widget_ = new ChatPanel(current_username_, center_stack_);
         message_list_ = chat_panel_widget_->messageList();
-        message_input_ = chat_panel_widget_->messageInput();
-        send_btn_ = chat_panel_widget_->sendButton();
-        group_list_btn_ = chat_panel_widget_->groupListButton();
         center_stack_->addWidget(chat_panel_widget_);
     }
 
@@ -521,7 +400,7 @@ void MainWindow::setupUi() {
     detail_panel_widget_ = new DetailPanel(current_username_, content_splitter_);
     detail_panel_ = detail_panel_widget_;
 
-    content_splitter_->addWidget(sidebar_panel_);
+    content_splitter_->addWidget(sidebar_widget_);
     content_splitter_->addWidget(center_panel);
     content_splitter_->addWidget(detail_panel_widget_);
     content_splitter_->setStretchFactor(1, 1);
@@ -597,15 +476,15 @@ void MainWindow::connectSignals() {
             : QStringLiteral("展开 ▼"));
     });
 
-    connect(send_btn_, &QPushButton::clicked, this, &MainWindow::sendCurrentMessage);
     connect(chat_panel_widget_, &ChatPanel::sendRequested,
             this, &MainWindow::sendCurrentMessage);
-    connect(group_list_btn_, &QPushButton::clicked, this, &MainWindow::openGroupListDialog);
-    connect(contact_search_edit_, &QLineEdit::textChanged,
+    connect(chat_panel_widget_, &ChatPanel::groupListRequested,
+            this, &MainWindow::openGroupListDialog);
+    connect(sidebar_widget_, &SidebarPanel::searchTextChanged,
             this, &MainWindow::filterFriendList);
-    connect(contact_list_, &QListWidget::itemSelectionChanged,
+    connect(sidebar_widget_, &SidebarPanel::contactSelectionChanged,
             this, &MainWindow::applySelectedFriend);
-    connect(sidebar_action_btn_, &QPushButton::clicked,
+    connect(sidebar_widget_, &SidebarPanel::actionRequested,
             this, &MainWindow::openOnlineUserDialog);
 
     connect(logout_btn_, &QPushButton::clicked, this, &MainWindow::logoutRequested);
@@ -985,7 +864,7 @@ void MainWindow::updateConversationSummary(const QString& peer,
         summary.has_message = true;
         summary.unread_count = (peer == active_chat_peer_) ? 0 : calculateUnreadCount(peer, messages);
     }
-    filterFriendList(contact_search_edit_->text());
+    filterFriendList(sidebar_widget_ ? sidebar_widget_->searchText() : QString());
 }
 
 void MainWindow::applyConversationMessage(const cloudvault::ChatMessage& message, bool increment_unread) {
@@ -1007,7 +886,7 @@ void MainWindow::applyConversationMessage(const cloudvault::ChatMessage& message
     } else if (increment_unread) {
         ++summary.unread_count;
     }
-    filterFriendList(contact_search_edit_->text());
+    filterFriendList(sidebar_widget_ ? sidebar_widget_->searchText() : QString());
 }
 
 void MainWindow::clearConversationUnread(const QString& peer) {
@@ -1016,7 +895,7 @@ void MainWindow::clearConversationUnread(const QString& peer) {
         return;
     }
     it->unread_count = 0;
-    filterFriendList(contact_search_edit_->text());
+    filterFriendList(sidebar_widget_ ? sidebar_widget_->searchText() : QString());
 }
 
 int MainWindow::calculateUnreadCount(const QString& peer,
@@ -1088,7 +967,7 @@ void MainWindow::refreshFriendList(const QList<QPair<QString, bool>>& friends) {
             pending_history_requests_.remove(peer);
         }
     }
-    filterFriendList(contact_search_edit_->text());
+    filterFriendList(sidebar_widget_ ? sidebar_widget_->searchText() : QString());
 }
 
 void MainWindow::filterFriendList(const QString& keyword) {
@@ -1127,8 +1006,7 @@ void MainWindow::filterFriendList(const QString& keyword) {
               });
 
     {
-        const QSignalBlocker blocker(contact_list_);
-        contact_list_->clear();
+        QList<SidebarContactEntry> visible_contacts;
 
         for (const auto& [username, online] : ordered_friends) {
             if (!trimmed.isEmpty() && !username.contains(trimmed, Qt::CaseInsensitive)) {
@@ -1138,38 +1016,23 @@ void MainWindow::filterFriendList(const QString& keyword) {
             const auto summary_it = conversation_summaries_.constFind(username);
             const bool has_message = summary_it != conversation_summaries_.constEnd()
                                   && summary_it->has_message;
-            const QString preview = has_message
-                ? summary_it->preview
-                : QStringLiteral("暂无消息");
-            const QString time = has_message ? formatConversationTime(summary_it->timestamp) : QString();
-            const int unread = has_message ? summary_it->unread_count : 0;
-
-            auto* item = new QListWidgetItem(contact_list_);
-            item->setSizeHint(QSize(0, 64));
-            item->setData(Qt::UserRole, username);
-            item->setData(Qt::UserRole + 1, online);
-
-            const bool is_selected = username == current;
-            auto* widget = createContactItemWidget(username,
-                                                   preview,
-                                                   time,
-                                                   unread,
-                                                   online,
-                                                   is_selected,
-                                                   contact_list_);
-            contact_list_->setItemWidget(item, widget);
-            if (is_selected) {
-                contact_list_->setCurrentItem(item);
-                item->setSelected(true);
-            }
+            SidebarContactEntry entry;
+            entry.username = username;
+            entry.preview = has_message ? summary_it->preview : QStringLiteral("暂无消息");
+            entry.time = has_message ? formatConversationTime(summary_it->timestamp) : QString();
+            entry.unread = has_message ? summary_it->unread_count : 0;
+            entry.online = online;
+            visible_contacts.append(entry);
         }
 
-        if (contact_list_->count() > 0 && current.isEmpty()) {
-            contact_list_->setCurrentRow(0);
+        if (sidebar_widget_) {
+            sidebar_widget_->populateContacts(visible_contacts,
+                                             current,
+                                             current.isEmpty());
         }
     }
 
-    if (contact_list_->count() == 0) {
+    if (!sidebar_widget_ || sidebar_widget_->contactCount() == 0) {
         showChatEmptyState();
     }
 
@@ -1181,19 +1044,8 @@ void MainWindow::filterFriendList(const QString& keyword) {
 }
 
 void MainWindow::updateContactSelectionState() {
-    for (int i = 0; i < contact_list_->count(); ++i) {
-        auto* item = contact_list_->item(i);
-        auto* widget = contact_list_->itemWidget(item);
-        if (!widget) {
-            continue;
-        }
-        const bool selected = item->isSelected();
-        widget->setProperty("selected", selected);
-        if (auto* accent = widget->findChild<QFrame*>(QStringLiteral("contactAccent"))) {
-            accent->setProperty("selected", selected);
-            repolish(accent);
-        }
-        repolish(widget);
+    if (sidebar_widget_) {
+        sidebar_widget_->refreshSelectionHighlights();
     }
 }
 
@@ -1223,7 +1075,8 @@ void MainWindow::sendCurrentMessage() {
         return;
     }
 
-    const QString content = message_input_->toPlainText().trimmed();
+    const QString content = chat_panel_widget_ ? chat_panel_widget_->inputText().trimmed()
+                                               : QString();
     if (content.isEmpty()) {
         return;
     }
@@ -1239,7 +1092,9 @@ void MainWindow::sendCurrentMessage() {
         chat_panel_widget_->appendMessage(local_message, current_username_);
     }
     applyConversationMessage(local_message, false);
-    message_input_->clear();
+    if (chat_panel_widget_) {
+        chat_panel_widget_->clearInput();
+    }
     showChatConversation(active_chat_peer_, selectedFriendOnline());
     QTimer::singleShot(120, this, [this, peer = active_chat_peer_] {
         if (!peer.isEmpty() && peer == active_chat_peer_) {
@@ -1469,15 +1324,23 @@ void MainWindow::switchMainTab(int index) {
     detail_panel_->setVisible(show_detail);
 
     if (index == 0) {
-        sidebar_title_label_->setText(QStringLiteral("消息"));
-        contact_search_edit_->setPlaceholderText(QStringLiteral("搜索联系人…"));
-        sidebar_action_btn_->setVisible(true);
+        if (sidebar_widget_) {
+            sidebar_widget_->setHeader(QStringLiteral("消息"),
+                                       QStringLiteral("搜索联系人…"),
+                                       true);
+        }
     } else if (index == 1) {
-        sidebar_title_label_->setText(QStringLiteral("文件"));
-        contact_search_edit_->setPlaceholderText(QStringLiteral("搜索联系人…"));
-        sidebar_action_btn_->setVisible(false);
+        if (sidebar_widget_) {
+            sidebar_widget_->setHeader(QStringLiteral("文件"),
+                                       QStringLiteral("搜索联系人…"),
+                                       false);
+        }
     } else {
-        sidebar_action_btn_->setVisible(false);
+        if (sidebar_widget_) {
+            sidebar_widget_->setHeader(QStringLiteral("我"),
+                                       QStringLiteral("搜索联系人…"),
+                                       false);
+        }
     }
 
     for (int i = 0; i < 3; ++i) {
@@ -1675,17 +1538,11 @@ void MainWindow::saveProfileDraft() {
 }
 
 QString MainWindow::selectedFriend() const {
-    if (auto* item = contact_list_->currentItem()) {
-        return item->data(Qt::UserRole).toString();
-    }
-    return {};
+    return sidebar_widget_ ? sidebar_widget_->currentUsername() : QString();
 }
 
 bool MainWindow::selectedFriendOnline() const {
-    if (auto* item = contact_list_->currentItem()) {
-        return item->data(Qt::UserRole + 1).toBool();
-    }
-    return false;
+    return sidebar_widget_ ? sidebar_widget_->currentOnline() : false;
 }
 
 QString MainWindow::selectedFilePath() const {
