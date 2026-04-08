@@ -10,13 +10,14 @@ QDialog,
 QWidget#mainShell,
 QWidget#centerPanel,
 QWidget#chatPage,
+QWidget#contactPage,
 QWidget#filePage,
 QWidget#profilePage {
     background: #F4F6F8;
 }
 
 QSplitter::handle {
-    background: #E2E6EA;
+    background: #D7DEE7;
     width: 1px;
 }
 
@@ -33,16 +34,17 @@ QLabel#connectionBannerLabel {
 }
 
 QWidget#iconBar {
-    background: #1C2333;
+    background: #F0F2F5;
     min-width: 52px;
     max-width: 52px;
+    border-right: 1px solid #E2E6EA;
 }
 
 QPushButton#iconNavBtn {
     background: transparent;
     border: none;
     border-radius: 10px;
-    color: rgba(255, 255, 255, 0.45);
+    color: #9CA3AF;
     min-width: 36px;
     max-width: 36px;
     min-height: 36px;
@@ -52,14 +54,14 @@ QPushButton#iconNavBtn {
 }
 
 QPushButton#iconNavBtn:hover {
-    background: rgba(255, 255, 255, 0.10);
-    color: rgba(255, 255, 255, 0.75);
+    background: #EFF6FF;
+    color: #2563EB;
 }
 
 QPushButton#iconNavBtn[active="true"] {
-    background: rgba(255, 255, 255, 0.15);
-    color: #FFFFFF;
-    border-left: 3px solid #FFFFFF;
+    background: #EFF6FF;
+    color: #1D4ED8;
+    border-left: 3px solid #3B82F6;
     border-radius: 0;
     padding-left: 5px;
 }
@@ -77,14 +79,14 @@ QPushButton#iconAvatarBtn[variant="1"] { background: #2563EB; }
 QPushButton#iconAvatarBtn[variant="2"] { background: #22C55E; }
 QPushButton#iconAvatarBtn[variant="3"] { background: #6B7280; }
 QPushButton#iconAvatarBtn[variant="4"] { background: #9CA3AF; }
-QPushButton#iconAvatarBtn[variant="5"] { background: #111827; }
+QPushButton#iconAvatarBtn[variant="5"] { background: #374151; }
 
 QPushButton#iconAvatarBtn:hover {
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    border: 2px solid #BFDBFE;
 }
 
 QPushButton#iconAvatarBtn[active="true"] {
-    border: 2px solid #FFFFFF;
+    border: 2px solid #3B82F6;
 }
 
 QLabel#iconAvatarDot {
@@ -94,43 +96,44 @@ QLabel#iconAvatarDot {
 }
 
 QFrame#sidebarPanel,
-QFrame#detailPanel,
+QFrame#contactProfileCard,
 QWidget#profileCard,
 QFrame#dialogSurface {
     background: #FFFFFF;
 }
 
 QFrame#sidebarHeader,
-QFrame#detailHeader,
 QFrame#chatTopBar,
 QFrame#fileTopBar,
 QFrame#dialogHeader {
-    background: #FFFFFF;
+    background: #FCFDFD;
     border-bottom: 1px solid #E2E6EA;
 }
 
 QFrame#sidebarPanel {
-    min-width: 240px;
-    max-width: 240px;
+    min-width: 260px;
+    max-width: 260px;
+    border-right: 1px solid #E2E6EA;
+    background: #FFFFFF;
 }
 
 QLabel#sidebarTitle,
 QLabel#chatTitle,
-QLabel#detailTitle,
 QLabel#dialogTitle {
     color: #111827;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 700;
 }
 
 QFrame#sidebarSearchRow {
     background: #FFFFFF;
+    border-bottom: 1px solid #E2E6EA;
 }
 
 QLineEdit {
     background: #F0F2F5;
     border: 1.5px solid transparent;
-    border-radius: 8px;
+    border-radius: 10px;
     padding: 0 12px;
     min-height: 40px;
     color: #111827;
@@ -147,7 +150,7 @@ QLineEdit::placeholderText {
 }
 
 QLineEdit#searchInput {
-    background: #F0F2F5;
+    background: #EEF2F6;
     border: none;
     min-height: 32px;
     max-height: 32px;
@@ -176,24 +179,27 @@ QTreeWidget::item {
 
 QListWidget::item:hover,
 QTreeWidget::item:hover {
-    background: #F9FAFB;
+    background: #F7FAFC;
 }
 
 QListWidget::item:selected,
 QTreeWidget::item:selected {
     background: #EFF6FF;
     color: #111827;
-    border-left: 2px solid #3B82F6;
+    border-left: 3px solid #3B82F6;
 }
 
 QFrame#contactCard,
 QFrame#fileRowCard {
     background: #FFFFFF;
+    border-radius: 12px;
+    border: 1px solid transparent;
 }
 
 QFrame#contactCard[selected="true"],
 QFrame#fileRowCard[selected="true"] {
     background: #EFF6FF;
+    border: 1px solid #BFDBFE;
 }
 
 QFrame#contactAccent,
@@ -208,9 +214,10 @@ QFrame#fileRowAccent[selected="true"] {
 
 QLabel#contactNameLabel,
 QLabel#filePathLabel,
+QLabel#filePathMetaLabel,
 QLabel#fileNameLabel,
-QLabel#detailContactName,
-QLabel#dialogItemTitle {
+QLabel#dialogItemTitle,
+QLabel#contactProfileTitle {
     color: #111827;
     font-size: 13px;
     font-weight: 500;
@@ -219,22 +226,55 @@ QLabel#dialogItemTitle {
 QLabel#contactPreviewLabel,
 QLabel#contactTimeLabel,
 QLabel#chatStatus,
-QLabel#detailMeta,
 QLabel#fileCellLabel,
 QLabel#fileTypeLabel,
 QLabel#profileId,
 QLabel#dialogMeta,
 QLabel#dialogItemMeta,
 QLabel#transferPercent,
-QLabel#detailFileMeta {
-    color: #9CA3AF;
+QLabel#contactProfileSubtitle,
+QLabel#contactProfileSummary {
+    color: #6B7280;
     font-size: 12px;
 }
 
+QLabel#contactProfileSummary:empty {
+    min-height: 0px;
+    max-height: 0px;
+}
+
 QLabel#contactTimeLabel,
-QLabel#transferPercent,
-QLabel#detailFileMeta {
+QLabel#transferPercent {
     font-size: 10px;
+}
+
+QWidget#fileBreadcrumbRow {
+    background: transparent;
+    min-height: 28px;
+}
+
+QPushButton#fileBreadcrumbBtn {
+    background: transparent;
+    border: none;
+    color: #6B7280;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 0 2px;
+}
+
+QPushButton#fileBreadcrumbBtn:hover {
+    color: #2563EB;
+}
+
+QPushButton#fileBreadcrumbBtn[active="true"] {
+    color: #111827;
+    font-weight: 700;
+}
+
+QLabel#fileBreadcrumbSep,
+QLabel#filePathMetaLabel {
+    color: #9CA3AF;
+    font-size: 11px;
 }
 
 QLabel#sectionKicker {
@@ -254,10 +294,44 @@ QLabel#contactBadgeLabel {
     font-weight: 700;
 }
 
+QLabel#contactTagLabel,
+QLabel#sidebarSectionTag {
+    background: #EFF6FF;
+    color: #2563EB;
+    min-height: 18px;
+    border-radius: 9px;
+    padding: 0 6px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+QFrame#contactCard[selected="true"] QLabel#contactTagLabel {
+    background: #DBEAFE;
+}
+
+QFrame#sidebarSectionRow {
+    background: #FFFFFF;
+}
+
+QLabel#sidebarSectionLabel {
+    color: #9CA3AF;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+QFrame#sidebarSectionRow {
+    border-top: 1px solid #F3F4F6;
+}
+
+QFrame#sidebarSectionRow:first-child {
+    border-top: none;
+}
+
 QPushButton#iconBtn {
     background: transparent;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     color: #6B7280;
     min-width: 30px;
     max-width: 30px;
@@ -267,12 +341,12 @@ QPushButton#iconBtn {
 }
 
 QPushButton#iconBtn:hover {
-    background: #F0F2F5;
-    color: #374151;
+    background: #E8EEF6;
+    color: #1F2937;
 }
 
 QListWidget#messageList {
-    background: #F4F6F8;
+    background: #F7F9FB;
 }
 
 QLabel#chatEmptyIcon {
@@ -281,9 +355,9 @@ QLabel#chatEmptyIcon {
 }
 
 QLabel#chatEmptyTitle {
-    color: #9CA3AF;
-    font-size: 14px;
-    font-weight: 500;
+    color: #4B5563;
+    font-size: 15px;
+    font-weight: 600;
 }
 
 QLabel#chatEmptyHint,
@@ -294,26 +368,26 @@ QLabel#dialogEmptyLabel {
 }
 
 QFrame#composeBar {
-    background: #FFFFFF;
+    background: #FCFDFD;
     border-top: 1px solid #E2E6EA;
 }
 
 QWidget#inputToolbar {
-    background: #FFFFFF;
+    background: #FCFDFD;
     border-bottom: 1px solid #E2E6EA;
 }
 
 QWidget#inputSendBar {
-    background: #FFFFFF;
+    background: #FCFDFD;
     border-top: 1px solid #E2E6EA;
 }
 
 QTextEdit#messageInput {
-    background: #FFFFFF;
+    background: #FCFDFD;
     border: none;
     border-radius: 0;
     min-height: 80px;
-    padding: 8px 16px;
+    padding: 12px 20px;
     color: #111827;
 }
 
@@ -321,7 +395,7 @@ QPushButton#sendBtn {
     background: #3B82F6;
     color: #FFFFFF;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     min-width: 88px;
     max-width: 88px;
     min-height: 32px;
@@ -334,44 +408,27 @@ QPushButton#sendBtn:hover {
     background: #2563EB;
 }
 
-QFrame#detailSection {
-    background: #FFFFFF;
-    border: 1px solid #E2E6EA;
-    border-radius: 10px;
-}
-
-QLabel#detailFileIcon {
-    background: #F3F4F6;
-    border-radius: 6px;
-}
-
-QLabel#detailFileName {
-    color: #111827;
-    font-size: 11.5px;
-    font-weight: 500;
-}
-
 QFrame#fileSearchRow {
-    background: #F4F6F8;
+    background: #FCFDFD;
 }
 
 QLineEdit#fileSearchInput {
     min-height: 36px;
     max-height: 36px;
-    border: none;
-    background: #F0F2F5;
+    border: 1px solid transparent;
+    background: #EEF2F6;
 }
 
 QLineEdit#fileSearchInput:focus {
-    border: none;
-    background: #E5E7EB;
+    border: 1px solid #BFDBFE;
+    background: #FFFFFF;
 }
 
 QFrame#fileTopBar,
 QFrame#fileActionBar,
 QFrame#fileTransferRow,
 QFrame#fileTableHeader {
-    background: #FFFFFF;
+    background: #FCFDFD;
 }
 
 QFrame#fileActionBar,
@@ -386,14 +443,14 @@ QFrame#fileTableHeader {
 
 QLabel#fileColumnLabel {
     color: #6B7280;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
 }
 
 QLabel#fileSelectionLabel,
 QLabel#fileStatusLabel {
     color: #6B7280;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 QLabel#fileStatusLabel[error="true"] {
@@ -401,9 +458,9 @@ QLabel#fileStatusLabel[error="true"] {
 }
 
 QPushButton#fileActionBtn {
-    background: #F3F4F6;
+    background: #F0F2F5;
     border: 1px solid #E2E6EA;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 0 14px;
     min-height: 32px;
     color: #374151;
@@ -411,7 +468,7 @@ QPushButton#fileActionBtn {
 }
 
 QPushButton#fileActionBtn:hover {
-    background: #E5E7EB;
+    background: #E7EDF4;
 }
 
 QPushButton#fileActionBtn:disabled {
@@ -422,7 +479,7 @@ QPushButton#fileActionBtn:disabled {
 QPushButton#primaryFileBtn {
     background: #3B82F6;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 0 16px;
     min-height: 32px;
     color: white;
@@ -437,7 +494,7 @@ QPushButton#primaryFileBtn:hover {
 QPushButton#deleteBtnFile {
     background: #FEF2F2;
     border: 1px solid #FECACA;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 0 14px;
     min-height: 32px;
     color: #EF4444;
@@ -491,7 +548,7 @@ QFrame#profileBanner {
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                                stop:0 #1C2333, stop:1 #2D3748);
+                                stop:0 #111827, stop:1 #1F2937);
 }
 
 QLabel#profileAvatar {
@@ -557,6 +614,7 @@ QPushButton#dangerBtn:hover {
 
 QFrame#dialogSurface {
     border-radius: 12px;
+    border: 1px solid #E2E6EA;
 }
 
 QFrame#dialogFooter {
@@ -634,4 +692,97 @@ QToolTip {
     border-radius: 4px;
     padding: 4px 8px;
     font-size: 12px;
+}
+
+QMenu {
+    background: #FFFFFF;
+    color: #111827;
+    border: 1px solid #E2E6EA;
+    border-radius: 10px;
+    padding: 6px;
+}
+
+QMenu::item {
+    background: transparent;
+    color: #111827;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 2px 0;
+}
+
+QMenu::item:selected {
+    background: #EFF6FF;
+    color: #2563EB;
+}
+
+QMenu::separator {
+    height: 1px;
+    background: #E5E7EB;
+    margin: 6px 8px;
+}
+
+QFrame#contactProfileCard {
+    background: #FCFDFD;
+    border: 1px solid #E2E6EA;
+    border-radius: 18px;
+}
+
+QLabel#contactProfileTitle {
+    font-size: 22px;
+    font-weight: 700;
+}
+
+QLabel#contactProfileSubtitle {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#contactProfileSummary {
+    color: #6B7280;
+    line-height: 1.5;
+}
+
+QFrame#contactProfileCard QLabel#fieldLabel {
+    color: #9CA3AF;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+QPushButton#primaryActionBtn,
+QPushButton#secondaryActionBtn,
+QPushButton#dangerActionBtn {
+    border-radius: 12px;
+    padding: 0 16px;
+    min-height: 38px;
+    font-weight: 600;
+}
+
+QPushButton#primaryActionBtn {
+    background: #3B82F6;
+    color: #FFFFFF;
+    border: none;
+}
+
+QPushButton#primaryActionBtn:hover {
+    background: #2563EB;
+}
+
+QPushButton#secondaryActionBtn {
+    background: #EFF6FF;
+    color: #2563EB;
+    border: 1px solid #BFDBFE;
+}
+
+QPushButton#secondaryActionBtn:hover {
+    background: #DBEAFE;
+}
+
+QPushButton#dangerActionBtn {
+    background: #FEF2F2;
+    color: #DC2626;
+    border: 1px solid #FECACA;
+}
+
+QPushButton#dangerActionBtn:hover {
+    background: #FEE2E2;
 }
