@@ -653,7 +653,7 @@ private:
 ```json
 {
     "server":   { "host": "0.0.0.0", "port": 5000, "thread_count": 8 },
-    "database": { "host": "127.0.0.1", "port": 3306, "name": "cloudvault",
+    "database": { "host": "127.0.0.1", "port": 3308, "name": "cloudvault",
                   "user": "cloudvault_app", "password_env": "CLOUDVAULT_DB_PASSWORD" },
     "storage":  { "root": "/data/cloudvault/filesys" },
     "tls":      { "cert": "/etc/cloudvault/cert.pem", "key": "/etc/cloudvault/key.pem" },

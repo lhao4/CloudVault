@@ -1,5 +1,5 @@
 // =============================================================
-// client/src/network/chat_service.cpp
+// client/src/service/chat_service.cpp
 // 私聊消息协议封装
 // =============================================================
 
@@ -80,6 +80,10 @@ void ChatService::loadHistory(const QString& peer) {
     client_.send(std::move(pdu));
 }
 
+void ChatService::loadGroupHistory(int groupId) {
+    Q_UNUSED(groupId);
+}
+
 void ChatService::onChatPush(const PDUHeader&, const std::vector<uint8_t>& body) {
     size_t offset = 0;
     std::string from;
@@ -94,6 +98,7 @@ void ChatService::onChatPush(const PDUHeader&, const std::vector<uint8_t>& body)
     }
 
     emit messageReceived(ChatMessage{
+        0,
         QString::fromStdString(from),
         QString::fromStdString(to),
         QString::fromStdString(content),
@@ -146,6 +151,7 @@ void ChatService::onHistoryResponse(const PDUHeader&, const std::vector<uint8_t>
             return;
         }
         messages.append(ChatMessage{
+            0,
             QString::fromStdString(from),
             QString::fromStdString(to),
             QString::fromStdString(content),

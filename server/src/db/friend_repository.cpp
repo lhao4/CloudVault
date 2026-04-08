@@ -1,6 +1,6 @@
 // =============================================================
 // server/src/db/friend_repository.cpp
-// friend_relation 表 CRUD
+// friend 表 CRUD
 // =============================================================
 
 #include "server/db/friend_repository.h"
@@ -44,23 +44,32 @@ bool prepareAndExecTwoInt(MYSQL* conn, const char* sql, int v1, int v2) {
 
 FriendRepository::FriendRepository(Database& db) : db_(db) {}
 
+// =============================================================
+// areFriends(): 检查双方是否已是好友（status=1，任意方向）
+// =============================================================
 bool FriendRepository::areFriends(int user_id, int friend_id) {
     auto conn = db_.acquire();
     MYSQL_STMT* stmt = mysql_stmt_init(conn.get());
     if (!stmt) return false;
 
     const char* sql =
-        "SELECT 1 FROM friend_relation WHERE user_id = ? AND friend_id = ? LIMIT 1";
+        "SELECT 1 FROM friend "
+        "WHERE ((user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)) "
+        "AND status = 1 LIMIT 1";
     if (mysql_stmt_prepare(stmt, sql, static_cast<unsigned long>(std::strlen(sql))) != 0) {
         mysql_stmt_close(stmt);
         return false;
     }
 
-    MYSQL_BIND params[2]{};
+    MYSQL_BIND params[4]{};
     params[0].buffer_type = MYSQL_TYPE_LONG;
     params[0].buffer      = &user_id;
     params[1].buffer_type = MYSQL_TYPE_LONG;
     params[1].buffer      = &friend_id;
+    params[2].buffer_type = MYSQL_TYPE_LONG;
+    params[2].buffer      = &friend_id;
+    params[3].buffer_type = MYSQL_TYPE_LONG;
+    params[3].buffer      = &user_id;
     mysql_stmt_bind_param(stmt, params);
 
     if (mysql_stmt_execute(stmt) != 0) {
@@ -79,88 +88,183 @@ bool FriendRepository::areFriends(int user_id, int friend_id) {
     return found;
 }
 
-bool FriendRepository::addFriendPair(int user_id, int friend_id) {
+// =============================================================
+// hasPendingRequest(): 检查是否有待处理申请（status=0）
+// =============================================================
+bool FriendRepository::hasPendingRequest(int from_id, int to_id) {
+    auto conn = db_.acquire();
+    MYSQL_STMT* stmt = mysql_stmt_init(conn.get());
+    if (!stmt) return false;
+
+    const char* sql =
+        "SELECT 1 FROM friend "
+        "WHERE user_id = ? AND friend_id = ? AND status = 0 LIMIT 1";
+    if (mysql_stmt_prepare(stmt, sql, static_cast<unsigned long>(std::strlen(sql))) != 0) {
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    MYSQL_BIND params[2]{};
+    params[0].buffer_type = MYSQL_TYPE_LONG;
+    params[0].buffer      = &from_id;
+    params[1].buffer_type = MYSQL_TYPE_LONG;
+    params[1].buffer      = &to_id;
+    mysql_stmt_bind_param(stmt, params);
+
+    if (mysql_stmt_execute(stmt) != 0) {
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    int value = 0;
+    MYSQL_BIND result{};
+    result.buffer_type = MYSQL_TYPE_LONG;
+    result.buffer      = &value;
+    mysql_stmt_bind_result(stmt, &result);
+
+    const bool found = (mysql_stmt_fetch(stmt) == 0);
+    mysql_stmt_close(stmt);
+    return found;
+}
+
+// =============================================================
+// insertRequest(): 插入好友申请（单向，status=0）
+// =============================================================
+bool FriendRepository::insertRequest(int from_id, int to_id) {
+    auto conn = db_.acquire();
+    const char* sql =
+        "INSERT INTO friend (user_id, friend_id, status) VALUES (?, ?, 0)";
+    return prepareAndExecTwoInt(conn.get(), sql, from_id, to_id);
+}
+
+// =============================================================
+// acceptRequest(): 同意申请，将 status 更新为 1
+// =============================================================
+bool FriendRepository::acceptRequest(int from_id, int to_id) {
+    auto conn = db_.acquire();
+    const char* sql =
+        "UPDATE friend SET status = 1 WHERE user_id = ? AND friend_id = ? AND status = 0";
+    return prepareAndExecTwoInt(conn.get(), sql, from_id, to_id);
+}
+
+// =============================================================
+// removeFriend(): 删除好友关系（双向查找并删除）
+// =============================================================
+bool FriendRepository::removeFriend(int user_id, int friend_id) {
     auto conn = db_.acquire();
     MYSQL* raw = conn.get();
 
     if (!execSimple(raw, "START TRANSACTION")) return false;
 
     const char* sql =
-        "INSERT INTO friend_relation (user_id, friend_id) VALUES (?, ?)";
-    const bool ok1 = prepareAndExecTwoInt(raw, sql, user_id, friend_id);
-    const bool ok2 = ok1 && prepareAndExecTwoInt(raw, sql, friend_id, user_id);
+        "DELETE FROM friend "
+        "WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)";
 
-    if (ok1 && ok2) {
-        return execSimple(raw, "COMMIT");
+    MYSQL_STMT* stmt = mysql_stmt_init(raw);
+    if (!stmt) {
+        execSimple(raw, "ROLLBACK");
+        return false;
     }
 
+    if (mysql_stmt_prepare(stmt, sql, static_cast<unsigned long>(std::strlen(sql))) != 0) {
+        mysql_stmt_close(stmt);
+        execSimple(raw, "ROLLBACK");
+        return false;
+    }
+
+    MYSQL_BIND params[4]{};
+    params[0].buffer_type = MYSQL_TYPE_LONG;
+    params[0].buffer      = &user_id;
+    params[1].buffer_type = MYSQL_TYPE_LONG;
+    params[1].buffer      = &friend_id;
+    params[2].buffer_type = MYSQL_TYPE_LONG;
+    params[2].buffer      = &friend_id;
+    params[3].buffer_type = MYSQL_TYPE_LONG;
+    params[3].buffer      = &user_id;
+    mysql_stmt_bind_param(stmt, params);
+
+    bool ok = (mysql_stmt_execute(stmt) == 0);
+    mysql_stmt_close(stmt);
+
+    if (ok) {
+        return execSimple(raw, "COMMIT");
+    }
     execSimple(raw, "ROLLBACK");
     return false;
 }
 
-bool FriendRepository::removeFriendPair(int user_id, int friend_id) {
-    auto conn = db_.acquire();
-    MYSQL* raw = conn.get();
-
-    if (!execSimple(raw, "START TRANSACTION")) return false;
-
-    const char* sql =
-        "DELETE FROM friend_relation WHERE user_id = ? AND friend_id = ?";
-    const bool ok1 = prepareAndExecTwoInt(raw, sql, user_id, friend_id);
-    const bool ok2 = ok1 && prepareAndExecTwoInt(raw, sql, friend_id, user_id);
-
-    if (ok1 && ok2) {
-        return execSimple(raw, "COMMIT");
-    }
-
-    execSimple(raw, "ROLLBACK");
-    return false;
-}
-
+// =============================================================
+// listFriends(): 列出全部已确认好友（status=1），含在线状态
+// 使用 UNION 查询处理单向记录
+// =============================================================
 std::vector<FriendInfo> FriendRepository::listFriends(int user_id) {
     auto conn = db_.acquire();
     MYSQL_STMT* stmt = mysql_stmt_init(conn.get());
     if (!stmt) return {};
 
     const char* sql =
-        "SELECT u.user_id, u.username "
-        "FROM friend_relation f "
-        "JOIN user_info u ON u.user_id = f.friend_id "
-        "WHERE f.user_id = ? "
+        "SELECT u.user_id, u.username, COALESCE(u.nickname,''), COALESCE(u.signature,''), u.is_online "
+        "FROM user_info u "
+        "WHERE u.user_id IN ("
+        "  SELECT friend_id FROM friend WHERE user_id = ? AND status = 1"
+        "  UNION"
+        "  SELECT user_id FROM friend WHERE friend_id = ? AND status = 1"
+        ") "
         "ORDER BY u.username ASC";
     if (mysql_stmt_prepare(stmt, sql, static_cast<unsigned long>(std::strlen(sql))) != 0) {
+        spdlog::error("listFriends prepare failed: {}", mysql_stmt_error(stmt));
         mysql_stmt_close(stmt);
         return {};
     }
 
-    MYSQL_BIND param{};
-    param.buffer_type = MYSQL_TYPE_LONG;
-    param.buffer      = &user_id;
-    mysql_stmt_bind_param(stmt, &param);
+    MYSQL_BIND param[2]{};
+    param[0].buffer_type = MYSQL_TYPE_LONG;
+    param[0].buffer      = &user_id;
+    param[1].buffer_type = MYSQL_TYPE_LONG;
+    param[1].buffer      = &user_id;
+    mysql_stmt_bind_param(stmt, param);
 
     if (mysql_stmt_execute(stmt) != 0) {
         mysql_stmt_close(stmt);
         return {};
     }
 
-    int user_id_value = 0;
+    int  uid_val = 0;
     char username_buf[64]{};
+    char nickname_buf[128]{};
+    char signature_buf[256]{};
+    char online_val = 0;
     unsigned long username_len = 0;
+    unsigned long nickname_len = 0;
+    unsigned long signature_len = 0;
 
-    MYSQL_BIND results[2]{};
-    results[0].buffer_type = MYSQL_TYPE_LONG;
-    results[0].buffer      = &user_id_value;
-    results[1].buffer_type = MYSQL_TYPE_STRING;
-    results[1].buffer      = username_buf;
+    MYSQL_BIND results[5]{};
+    results[0].buffer_type   = MYSQL_TYPE_LONG;
+    results[0].buffer        = &uid_val;
+    results[1].buffer_type   = MYSQL_TYPE_STRING;
+    results[1].buffer        = username_buf;
     results[1].buffer_length = sizeof(username_buf);
-    results[1].length      = &username_len;
+    results[1].length        = &username_len;
+    results[2].buffer_type   = MYSQL_TYPE_STRING;
+    results[2].buffer        = nickname_buf;
+    results[2].buffer_length = sizeof(nickname_buf);
+    results[2].length        = &nickname_len;
+    results[3].buffer_type   = MYSQL_TYPE_STRING;
+    results[3].buffer        = signature_buf;
+    results[3].buffer_length = sizeof(signature_buf);
+    results[3].length        = &signature_len;
+    results[4].buffer_type   = MYSQL_TYPE_TINY;
+    results[4].buffer        = &online_val;
     mysql_stmt_bind_result(stmt, results);
 
     std::vector<FriendInfo> friends;
     while (mysql_stmt_fetch(stmt) == 0) {
         friends.push_back(FriendInfo{
-            user_id_value,
+            uid_val,
             std::string(username_buf, username_len),
+            std::string(nickname_buf, nickname_len),
+            std::string(signature_buf, signature_len),
+            online_val != 0,
         });
     }
 

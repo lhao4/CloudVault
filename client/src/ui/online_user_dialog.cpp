@@ -4,7 +4,10 @@
 // =============================================================
 
 #include "online_user_dialog.h"
+#include "ui/widget_helpers.h"
 
+#include <QFrame>
+#include <QGraphicsDropShadowEffect>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -15,92 +18,46 @@
 
 #include <algorithm>
 
+using namespace cv_ui;
+
 namespace {
 
-QString dialogStyle() {
-    return QStringLiteral(R"(
-        QDialog {
-            background: #F4F6F8;
-            color: #111827;
-            font-family: "DM Sans", "PingFang SC", "Microsoft YaHei", sans-serif;
-        }
+QWidget* createUserRow(const cloudvault::FriendProfile& profile, QWidget* parent = nullptr) {
+    auto* row = new QWidget(parent);
+    auto* layout = new QHBoxLayout(row);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(10);
 
-        QLabel#titleLabel {
-            font-size: 18px;
-            font-weight: 700;
-            color: #111827;
-        }
+    auto* avatar = new QLabel(row);
+    prepareAvatarBadge(avatar, profile.username, 32);
+    layout->addWidget(avatar);
 
-        QLabel#subtleLabel {
-            font-size: 12px;
-            color: #6B7280;
-        }
+    auto* text_layout = new QVBoxLayout();
+    text_layout->setContentsMargins(0, 0, 0, 0);
+    text_layout->setSpacing(1);
 
-        QLineEdit {
-            min-height: 42px;
-            background: #F0F2F5;
-            border: 1px solid #E2E6EA;
-            border-radius: 8px;
-            padding: 0 14px;
-            font-size: 14px;
-        }
+    const QString display_name = profile.nickname.trimmed().isEmpty()
+        ? profile.username
+        : profile.nickname.trimmed();
+    auto* name_label = new QLabel(display_name, row);
+    name_label->setObjectName(QStringLiteral("dialogItemTitle"));
+    text_layout->addWidget(name_label);
 
-        QLineEdit:focus {
-            background: #FFFFFF;
-            border-color: #3B82F6;
-        }
+    auto* meta_label = new QLabel(QStringLiteral("在线"), row);
+    meta_label->setObjectName(QStringLiteral("dialogItemMeta"));
+    text_layout->addWidget(meta_label);
+    layout->addLayout(text_layout, 1);
 
-        QListWidget {
-            background: #FFFFFF;
-            border: 1px solid #E2E6EA;
-            border-radius: 10px;
-            outline: none;
-        }
+    auto* dot = new QLabel(QStringLiteral("●"), row);
+    dot->setObjectName(QStringLiteral("dialogOnlineDot"));
+    layout->addWidget(dot, 0, Qt::AlignRight | Qt::AlignVCenter);
 
-        QListWidget::item {
-            padding: 10px 12px;
-            border-bottom: 1px solid #F0F2F5;
-        }
-
-        QListWidget::item:selected {
-            background: #EFF6FF;
-            color: #111827;
-        }
-
-        QPushButton {
-            min-height: 34px;
-            border-radius: 8px;
-            padding: 0 12px;
-            font-size: 13px;
-            font-weight: 600;
-            border: none;
-        }
-
-        QPushButton#lightButton {
-            background: #F8FAFC;
-            color: #374151;
-            border: 1px solid #E2E6EA;
-        }
-
-        QPushButton#lightButton:hover {
-            background: #EFF6FF;
-            border-color: #93C5FD;
-        }
-
-        QPushButton#primaryButton {
-            background: #3B82F6;
-            color: white;
-        }
-
-        QPushButton#primaryButton:hover {
-            background: #2563EB;
-        }
-    )");
+    return row;
 }
 
 } // namespace
 
-OnlineUserDialog::OnlineUserDialog(const QList<QPair<QString, bool>>& users,
+OnlineUserDialog::OnlineUserDialog(const QList<cloudvault::FriendProfile>& users,
                                    QWidget* parent)
     : QDialog(parent), users_(users) {
     setupUi();
@@ -108,50 +65,84 @@ OnlineUserDialog::OnlineUserDialog(const QList<QPair<QString, bool>>& users,
     populateList();
 }
 
-void OnlineUserDialog::setUsers(const QList<QPair<QString, bool>>& users) {
+void OnlineUserDialog::setUsers(const QList<cloudvault::FriendProfile>& users) {
     users_ = users;
     populateList(search_edit_ ? search_edit_->text() : QString());
 }
 
 void OnlineUserDialog::setupUi() {
-    setWindowTitle(QStringLiteral("在线用户"));
+    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setModal(true);
-    resize(420, 480);
-    setStyleSheet(dialogStyle());
+    setAttribute(Qt::WA_TranslucentBackground);
+    resize(380, 460);
 
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(18, 18, 18, 18);
-    root->setSpacing(12);
+    root->setContentsMargins(14, 14, 14, 14);
+    root->setSpacing(0);
 
-    auto* title = new QLabel(
-        QStringLiteral("在线用户（%1 人）").arg(std::count_if(
-            users_.begin(), users_.end(), [](const auto& user) { return user.second; })),
-        this);
-    title->setObjectName(QStringLiteral("titleLabel"));
-    root->addWidget(title);
+    auto* surface = new QFrame(this);
+    surface->setObjectName(QStringLiteral("dialogSurface"));
+    applyShadow(surface);
+    auto* surface_layout = new QVBoxLayout(surface);
+    surface_layout->setContentsMargins(0, 0, 0, 0);
+    surface_layout->setSpacing(0);
 
-    auto* hint = new QLabel(QStringLiteral("可直接输入用户名添加，也可从在线列表中选择。"), this);
-    hint->setObjectName(QStringLiteral("subtleLabel"));
-    root->addWidget(hint);
+    auto* header = new QFrame(surface);
+    header->setObjectName(QStringLiteral("dialogHeader"));
+    header->setFixedHeight(52);
+    auto* header_layout = new QHBoxLayout(header);
+    header_layout->setContentsMargins(16, 0, 12, 0);
+    header_layout->setSpacing(8);
 
-    search_edit_ = new QLineEdit(this);
-    search_edit_->setPlaceholderText(QStringLiteral("搜索…"));
-    root->addWidget(search_edit_);
+    title_label_ = new QLabel(header);
+    title_label_->setObjectName(QStringLiteral("dialogTitle"));
+    header_layout->addWidget(title_label_);
+    header_layout->addStretch();
 
-    user_list_ = new QListWidget(this);
-    root->addWidget(user_list_, 1);
+    auto* close_btn = new QPushButton(QStringLiteral("×"), header);
+    close_btn->setObjectName(QStringLiteral("iconBtn"));
+    close_btn->setFixedSize(30, 30);
+    connect(close_btn, &QPushButton::clicked, this, &OnlineUserDialog::reject);
+    header_layout->addWidget(close_btn);
+    surface_layout->addWidget(header);
 
-    auto* button_row = new QHBoxLayout();
-    button_row->setSpacing(8);
-    refresh_btn_ = new QPushButton(QStringLiteral("刷新"), this);
-    refresh_btn_->setObjectName(QStringLiteral("lightButton"));
-    add_btn_ = new QPushButton(QStringLiteral("+ 添加好友"), this);
-    add_btn_->setObjectName(QStringLiteral("primaryButton"));
+    auto* content = new QWidget(surface);
+    auto* content_layout = new QVBoxLayout(content);
+    content_layout->setContentsMargins(16, 16, 16, 16);
+    content_layout->setSpacing(12);
+
+    search_edit_ = new QLineEdit(content);
+    search_edit_->setObjectName(QStringLiteral("dialogSearchEdit"));
+    search_edit_->setPlaceholderText(QStringLiteral("搜索在线用户…"));
+    content_layout->addWidget(search_edit_);
+
+    user_list_ = new QListWidget(content);
+    user_list_->setObjectName(QStringLiteral("dialogList"));
+    user_list_->setSpacing(0);
+    user_list_->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    content_layout->addWidget(user_list_, 1);
+    surface_layout->addWidget(content, 1);
+
+    auto* footer = new QFrame(surface);
+    footer->setObjectName(QStringLiteral("dialogFooter"));
+    footer->setFixedHeight(56);
+    auto* footer_layout = new QHBoxLayout(footer);
+    footer_layout->setContentsMargins(16, 0, 16, 0);
+    footer_layout->setSpacing(8);
+
+    refresh_btn_ = new QPushButton(QStringLiteral("刷新"), footer);
+    refresh_btn_->setObjectName(QStringLiteral("dialogSecondaryBtn"));
+    footer_layout->addWidget(refresh_btn_);
+
+    footer_layout->addStretch();
+
+    add_btn_ = new QPushButton(QStringLiteral("+ 添加好友"), footer);
+    add_btn_->setObjectName(QStringLiteral("dialogPrimaryBtn"));
     add_btn_->setEnabled(false);
-    button_row->addWidget(refresh_btn_);
-    button_row->addStretch();
-    button_row->addWidget(add_btn_);
-    root->addLayout(button_row);
+    footer_layout->addWidget(add_btn_);
+    surface_layout->addWidget(footer);
+
+    root->addWidget(surface);
 }
 
 void OnlineUserDialog::connectSignals() {
@@ -160,10 +151,11 @@ void OnlineUserDialog::connectSignals() {
                 populateList(text);
                 add_btn_->setEnabled(!text.trimmed().isEmpty() || user_list_->currentItem() != nullptr);
             });
-    connect(user_list_, &QListWidget::itemSelectionChanged, this, [this] {
-        add_btn_->setEnabled(!search_edit_->text().trimmed().isEmpty() ||
-                             user_list_->currentItem() != nullptr);
-    });
+    connect(user_list_, &QListWidget::itemSelectionChanged,
+            this, [this] {
+                add_btn_->setEnabled(!search_edit_->text().trimmed().isEmpty()
+                                     || user_list_->currentItem() != nullptr);
+            });
     connect(refresh_btn_, &QPushButton::clicked, this, &OnlineUserDialog::refreshRequested);
     connect(add_btn_, &QPushButton::clicked, this, [this] {
         QString username = search_edit_->text().trimmed();
@@ -175,29 +167,40 @@ void OnlineUserDialog::connectSignals() {
             accept();
         }
     });
-    connect(user_list_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        if (!item) {
-            return;
-        }
-        emit userChosen(item->data(Qt::UserRole).toString());
-        accept();
-    });
+    connect(user_list_, &QListWidget::itemDoubleClicked,
+            this, [this](QListWidgetItem* item) {
+                if (!item) {
+                    return;
+                }
+                emit userChosen(item->data(Qt::UserRole).toString());
+                accept();
+            });
 }
 
 void OnlineUserDialog::populateList(const QString& keyword) {
     user_list_->clear();
 
-    for (const auto& [username, online] : users_) {
-        if (!online) {
+    int online_count = 0;
+    const QString trimmed = keyword.trimmed();
+    for (const auto& profile : users_) {
+        if (!profile.online) {
             continue;
         }
-        if (!keyword.trimmed().isEmpty() &&
-            !username.contains(keyword.trimmed(), Qt::CaseInsensitive)) {
+        ++online_count;
+        const QString display_name = profile.nickname.trimmed().isEmpty()
+            ? profile.username
+            : profile.nickname.trimmed();
+        if (!trimmed.isEmpty()
+            && !profile.username.contains(trimmed, Qt::CaseInsensitive)
+            && !display_name.contains(trimmed, Qt::CaseInsensitive)) {
             continue;
         }
 
-        auto* item = new QListWidgetItem(
-            QStringLiteral("🔵 %1").arg(username), user_list_);
-        item->setData(Qt::UserRole, username);
+        auto* item = new QListWidgetItem(user_list_);
+        item->setData(Qt::UserRole, profile.username);
+        item->setSizeHint(QSize(0, 48));
+        user_list_->setItemWidget(item, createUserRow(profile, user_list_));
     }
+
+    title_label_->setText(QStringLiteral("在线用户（%1）").arg(online_count));
 }

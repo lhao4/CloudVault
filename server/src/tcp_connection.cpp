@@ -30,6 +30,11 @@ TcpConnection::~TcpConnection() {
 void TcpConnection::send(std::vector<uint8_t> data) {
     if (closed_.load()) return;
 
+    if (send_interceptor_) {
+        send_interceptor_(data);
+        return;
+    }
+
     {
         std::lock_guard lock(send_mutex_);
         send_buf_.insert(send_buf_.end(), data.begin(), data.end());
@@ -45,6 +50,11 @@ void TcpConnection::send(std::vector<uint8_t> data) {
 // ── 关闭连接（线程安全）──────────────────────────────────
 void TcpConnection::close() {
     if (closed_.exchange(true)) return;  // 已关闭，幂等
+
+    if (!loop_) {
+        doClose();
+        return;
+    }
 
     auto self = shared_from_this();
     loop_->runInLoop([self] {
@@ -142,8 +152,12 @@ void TcpConnection::doClose() {
     if (!closed_.exchange(true)) {
         // 首次调用
     }
-    loop_->removeFd(fd_);
-    ::close(fd_);
+    if (loop_ && fd_ >= 0) {
+        loop_->removeFd(fd_);
+    }
+    if (fd_ >= 0) {
+        ::close(fd_);
+    }
     fd_ = -1;
 
     for (const auto& cb : close_cbs_) {

@@ -78,7 +78,7 @@ FileStorage
 
 ## 11.3 协议设计
 
-当前实现沿用 [protocol.h](/mnt/d/CloudVault/common/include/common/protocol.h) 中已有的文件管理消息类型：
+当前实现沿用 `common/include/common/protocol.h` 中已有的文件管理消息类型：
 
 ```cpp
 MKDIR
@@ -231,7 +231,7 @@ message : string
 
 ### 11.4.1 FileStorage：文件系统操作封装
 
-[file_storage.cpp](/mnt/d/CloudVault/server/src/file_storage.cpp) 是本章的核心。
+`server/src/file_storage.cpp` 是本章的核心。
 
 它负责：
 
@@ -259,8 +259,8 @@ message : string
 
 实现位置：
 
-- [file_storage.h](/mnt/d/CloudVault/server/include/server/file_storage.h)
-- [file_storage.cpp](/mnt/d/CloudVault/server/src/file_storage.cpp)
+- `server/include/server/file_storage.h`
+- `server/src/file_storage.cpp`
 
 核心思路：
 
@@ -280,7 +280,7 @@ message : string
 
 ### 11.4.3 FileHandler：协议解析与回包
 
-[file_handler.cpp](/mnt/d/CloudVault/server/src/handler/file_handler.cpp) 负责：
+`server/src/handler/file_handler.cpp` 负责：
 
 - `handleList()`
 - `handleMkdir()`
@@ -298,7 +298,7 @@ message : string
 
 ### 11.4.4 ServerApp 接入
 
-[server_app.cpp](/mnt/d/CloudVault/server/src/server_app.cpp) 在初始化阶段新增：
+`server/src/server_app.cpp` 在初始化阶段新增：
 
 1. 创建 `FileStorage`
 2. 创建 `FileHandler`
@@ -319,7 +319,7 @@ message : string
 
 ### 11.5.1 FileService
 
-[file_service.cpp](/mnt/d/CloudVault/client/src/network/file_service.cpp) 负责：
+`client/src/service/file_service.cpp` 负责：
 
 - 构建文件管理请求 PDU
 - 解析文件列表与搜索结果
@@ -339,7 +339,7 @@ search(keyword)
 
 ### 11.5.2 MainWindow 文件页
 
-[main_window.cpp](/mnt/d/CloudVault/client/src/ui/main_window.cpp) 中原本的文件页只是静态卡片，现在已经换成真实数据驱动。
+`client/src/ui/main_window.cpp` 中原本的文件页只是静态卡片，现在已经换成真实数据驱动。
 
 当前文件页具备：
 
@@ -377,7 +377,7 @@ search(keyword)
 
 ## 11.6 数据模型说明
 
-[init.sql](/mnt/d/CloudVault/server/sql/init.sql) 里已经有 `file_info` 表：
+`server/sql/init.sql` 里已经有 `file_info` 表：
 
 ```sql
 CREATE TABLE IF NOT EXISTS file_info (

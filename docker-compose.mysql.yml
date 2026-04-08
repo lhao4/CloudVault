@@ -1,0 +1,29 @@
+services:
+  cloudvault-mysql:
+    image: mysql:8.0
+    container_name: cloudvault-mysql
+    restart: unless-stopped
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: cloudvault_root_123
+      MYSQL_DATABASE: cloudvault
+      MYSQL_USER: cloudvault_app
+      MYSQL_PASSWORD: cloudvault_dev_123
+      TZ: Asia/Shanghai
+    ports:
+      - "3308:3306"
+    volumes:
+      - cloudvault_mysql_data:/var/lib/mysql
+      - ./server/sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  cloudvault_mysql_data:

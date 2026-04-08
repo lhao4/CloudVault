@@ -1,509 +1,423 @@
 # CloudVault 云巢 — 系统架构文档
 
-> **版本**：v2.0 | **状态**：已确认
+> 版本：v2.1  
+> 状态：与当前代码同步  
+> 更新时间：2026-03-27
 
 ---
 
-## 1. 整体架构概览
+## 1. 总体架构
 
-CloudVault 采用经典 **C/S（客户端/服务端）** 架构，客户端与服务端通过 TCP 长连接通信，共用同一套二进制协议库（`common`）。
+CloudVault 当前采用经典 C/S 架构：
 
-```
+- 客户端：Qt 6 Widgets，目标平台为 Windows
+- 服务端：C++17 + epoll + MySQL，目标平台为 Linux
+- 共享协议库：`common`
+- 通信方式：自定义二进制 PDU 协议 over TCP 长连接
+
+当前代码里尚未启用 TLS。文档中若出现 TLS，应视为后续规划，不属于现阶段实现。
+
+```text
 ┌─────────────────────────────────────────────────────────────┐
-│                        客户端（Windows）                      │
+│                      客户端（Windows）                     │
 │                                                             │
-│   ┌──────────┐    ┌──────────────┐    ┌─────────────────┐  │
-│   │  UI 层   │◄──►│  Service 层  │◄──►│  Network 层     │  │
-│   │ Qt Widgets│    │ 业务逻辑/信号 │    │ TcpClient/Router│  │
-│   └──────────┘    └──────────────┘    └────────┬────────┘  │
-│                                                │            │
-│                         ┌──────────────────────┘            │
-│                         │  共享 common 库                   │
-│                         │  PDU v2 编解码 / 密码哈希          │
-└─────────────────────────┼────────────────────────────────────┘
-                          │  TCP 长连接（TLS 加密）
-                          │  自定义二进制协议 PDU v2
-┌─────────────────────────┼────────────────────────────────────┐
-│                         │  共享 common 库                   │
-│                         │  PDU v2 编解码 / 密码哈希          │
-│                         │                                   │
-│   ┌─────────────────────▼──────────────────────────────┐   │
-│   │                   服务端（Linux）                    │   │
-│   │                                                    │   │
-│   │  主线程 EventLoop (epoll)                           │   │
-│   │  ├── TcpServer: accept 新连接                       │   │
-│   │  ├── TcpConnection[]: 读写缓冲区 + PDU 拆包         │   │
-│   │  └── 完整 PDU → 提交给 ThreadPool                   │   │
-│   │                      ↓                             │   │
-│   │  工作线程池 (std::thread × 8)                       │   │
-│   │  └── MessageDispatcher                             │   │
-│   │       ├── AuthHandler    ──► UserRepository        │   │
-│   │       ├── FriendHandler  ──► FriendRepository      │   │
-│   │       ├── ChatHandler    ──► SessionManager        │   │
-│   │       └── FileHandler    ──► FileStorage           │   │
-│   │                                                    │   │
-│   │  SessionManager: username ↔ TcpConnection 映射      │   │
-│   │  Database: MySQL 连接池                             │   │
-│   └────────────────────────────────────────────────────┘   │
-│                        服务端（Linux）                       │
-└─────────────────────────────────────────────────────────────┘
-                          │
-               ┌──────────▼──────────┐
-               │   MySQL 数据库       │
-               │  user_info / friend  │
-               │  chat_message 等     │
-               └─────────────────────┘
+│   UI Panel / Dialog  ◄──►  Service  ◄──►  Network          │
+│   LoginWindow               AuthService       TcpClient      │
+│   MainWindow                FriendService     ResponseRouter │
+│   SidebarPanel              ChatService                         │
+│   ChatPanel                 GroupService                        │
+│   FilePanel                 FileService                         │
+│   ContactPanel              ShareService                        │
+│   ProfilePanel / Dialogs                                      │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               │ TCP 长连接 + PDU v2
+                               │
+┌──────────────────────────────▼──────────────────────────────┐
+│                       服务端（Linux）                      │
+│                                                             │
+│  EventLoop + TcpServer + TcpConnection                      │
+│                 │                                           │
+│                 ▼                                           │
+│             ThreadPool                                      │
+│                 │                                           │
+│                 ▼                                           │
+│         MessageDispatcher                                   │
+│        ├── AuthHandler                                      │
+│        ├── FriendHandler                                    │
+│        ├── ChatHandler                                      │
+│        ├── GroupHandler                                     │
+│        ├── FileHandler                                      │
+│        └── ShareHandler                                     │
+│                 │                                           │
+│   SessionManager / FileStorage / Database / Repository      │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+                           MySQL 数据库
 ```
 
 ---
 
-## 2. 服务端架构
+## 2. 当前仓库结构
 
-### 2.1 整体设计原则
-
-- **零 Qt 依赖**：服务端仅使用 C++17 标准库、POSIX API、libmysqlclient、spdlog、nlohmann/json
-- **主线程单 epoll，工作线程处理业务**：I/O 与业务逻辑分离，避免阻塞事件循环
-- **无状态 Handler**：每个 Handler 方法无成员变量，依赖注入 Repository 和 SessionManager
-
-### 2.2 服务端模块划分
-
-```
-server/
-├── ServerApp          — 应用生命周期（初始化 / 运行 / 关闭）
-├── Config             — JSON 配置加载与校验
-├── EventLoop          — epoll 封装（add/modify/remove fd，run 循环）
-├── TcpServer          — 监听 socket，accept 新连接，创建 TcpConnection
-├── TcpConnection      — 单连接状态（fd、接收缓冲区、发送队列、会话信息）
-├── ThreadPool         — 固定大小线程池，submit(std::function<void()>)
-├── SessionManager     — 在线会话的线程安全映射（shared_mutex）
-├── db/
-│   ├── Database       — MySQL 连接池（acquire / release）
-│   ├── UserRepository — 用户相关预处理语句
-│   └── FriendRepository — 好友相关预处理语句
-├── handler/
-│   ├── MessageDispatcher — 按 MessageType 路由到具体 Handler
-│   ├── AuthHandler    — 注册、登录
-│   ├── FriendHandler  — 好友增删查
-│   ├── ChatHandler    — 消息转发、离线消息
-│   └── FileHandler    — 文件全部操作
-└── FileStorage        — std::filesystem 封装（路径校验 + 操作）
-```
-
-### 2.3 请求处理流程
-
-```
-客户端发送数据
-      │
-      ▼
-EventLoop::epoll_wait()  ← 主线程，非阻塞
-      │
-      ▼
-TcpConnection::onReadable()
-  └── 数据追加到 recv_buffer
-  └── 循环尝试解析完整 PDU（total_length 字段）
-  └── PDU 完整 → 拷贝到堆 → submit 到 ThreadPool
-                                   │
-                                   ▼
-                           ThreadPool 工作线程
-                           MessageDispatcher::dispatch(pdu, conn)
-                                   │
-                           按 MessageType 路由
-                                   │
-                           具体 Handler::handle()
-                           ├── 调用 Repository（DB 预处理语句）
-                           ├── 调用 FileStorage（文件操作）
-                           └── 调用 SessionManager（消息转发）
-                                   │
-                           构建响应 PDU
-                                   │
-                           TcpConnection::send(pdu)
-                           └── 放入发送队列
-                           └── 通知 EventLoop 注册 EPOLLOUT
-                                   │
-                                   ▼
-                           EventLoop::onWritable() ← 主线程
-                           └── 从发送队列取数据 write() 发送
-```
-
-### 2.4 线程模型
-
-| 线程 | 数量 | 职责 |
-|------|------|------|
-| 主线程（EventLoop） | 1 | accept、read、write，不做任何阻塞操作 |
-| 工作线程（ThreadPool） | 8（可配置） | 执行 Handler 业务逻辑、DB 查询、文件 I/O |
-
-**关键约束**：
-- 工作线程不直接 write socket，只将响应 PDU 放入 `TcpConnection` 的线程安全发送队列
-- 主线程通过 `eventfd` 或 `EPOLLOUT` 感知到有数据待发送后执行实际 write
-
-### 2.5 SessionManager
-
-```cpp
-class SessionManager {
-    std::shared_mutex mutex_;
-    std::unordered_map<std::string, TcpConnection*> name_to_conn_;
-    std::unordered_map<int, std::string> fd_to_name_;
-public:
-    void     registerSession(const std::string& name, TcpConnection* conn);
-    void     unregisterSession(int fd);
-    TcpConnection* findByName(const std::string& name);  // nullptr = 离线
-    std::vector<std::string> getOnlineUsers();
-};
-```
-
-- 登录成功后调用 `registerSession`
-- 连接断开（EPOLLRDHUP）后调用 `unregisterSession` 并更新 DB online=0
-- 聊天转发、好友请求转发均通过 `findByName` 获取目标连接后直接发送
-
-### 2.6 数据库连接池
-
-- 初始化时创建 N 个 `MYSQL*` 连接（N = 线程池大小，默认 8）
-- 工作线程通过 `DbConnection guard = db.acquire()` RAII 方式借用连接
-- 连接断开时自动重连（`mysql_ping` 检测）
-- 所有 SQL 均使用预处理语句（`mysql_stmt_*`），杜绝 SQL 注入
-
----
-
-## 3. 客户端架构
-
-### 3.1 整体设计原则
-
-- **三层分离**：UI 层只负责显示和用户交互，Service 层封装业务语义，Network 层处理传输
-- **Qt 信号槽驱动**：Service 收到服务端响应后 emit 信号，UI 通过 connect 订阅更新
-- **无全局单例**：对象通过构造函数参数注入，取代原 `Client::getInstance()` 等单例
-
-### 3.2 客户端模块划分
-
-```
-client/
-├── App               — 应用启动，创建并注入所有对象
-├── network/
-│   ├── TcpClient     — QTcpSocket 封装，PDU 收发缓冲，sendPDU()
-│   └── ResponseRouter — 按 MessageType dispatch 到 Service 的回调
-├── service/
-│   ├── AuthService   — 构建注册/登录 PDU，解析响应，emit 信号
-│   ├── FriendService — 好友相关请求/响应
-│   ├── ChatService   — 聊天相关请求/响应
-│   └── FileService   — 文件相关请求/响应
-└── ui/
-    ├── LoginWindow   — 登录/注册界面（原 Client）
-    ├── MainWindow    — 主界面 Tab（原 Index）
-    ├── FriendWidget  — 好友管理面板（原 Friend）
-    ├── FileWidget    — 文件管理面板（原 File）
-    ├── ChatWindow    — 聊天窗口（原 Chat）
-    ├── OnlineUserDialog — 在线用户列表（原 OnlineUser）
-    └── ShareFileDialog  — 文件分享选择（原 ShareFile）
-```
-
-### 3.3 数据流示例（以登录为例）
-
-```
-用户点击"登录"按钮
-      │
-      ▼
-LoginWindow::onLoginClicked()
-  └── authService->login(username, password)
-            │
-            ▼
-      AuthService::login()
-      └── 构建 LOGIN_REQUEST PDU（密码客户端先哈希）
-      └── tcpClient->sendPDU(pdu)
-                          │
-                    TCP 发送到服务端
-                          │
-                    服务端处理后返回 LOGIN_RESPOND
-                          │
-                          ▼
-      TcpClient::onDataReady()  ← QTcpSocket::readyRead 信号
-      └── 拼接 recv_buffer，尝试解析完整 PDU
-      └── PDU 完整 → ResponseRouter::dispatch(pdu)
-                          │
-                          ▼
-      AuthService::onLoginResponse(pdu)
-      └── 解析 status_code
-      └── emit loginSucceeded(username)   或 emit loginFailed(reason)
-                          │
-                          ▼
-      LoginWindow::onLoginSucceeded(username)
-      └── 隐藏登录窗口
-      └── 创建 MainWindow 并显示
-```
-
-### 3.4 对象生命周期与注入
-
-```cpp
-// App::init()
-auto tcpClient     = std::make_unique<TcpClient>();
-auto router        = std::make_unique<ResponseRouter>();
-auto authService   = std::make_unique<AuthService>(tcpClient.get(), router.get());
-auto friendService = std::make_unique<FriendService>(tcpClient.get(), router.get());
-auto chatService   = std::make_unique<ChatService>(tcpClient.get(), router.get());
-auto fileService   = std::make_unique<FileService>(tcpClient.get(), router.get());
-
-auto loginWindow   = std::make_unique<LoginWindow>(authService.get());
-// 登录成功后 LoginWindow 创建 MainWindow，传入各 service 指针
-```
-
----
-
-## 4. 共享协议库（common）
-
-### 4.1 职责
-
-| 模块 | 内容 |
-|------|------|
-| `message_types.h` | `enum class MessageType : uint32_t`，定义全部消息类型 |
-| `protocol.h` | `PDUHeader` 结构体定义（16 字节固定头） |
-| `protocol_codec.h` | `PDUBuilder`（构建 PDU）、`PDUParser`（拆包检测） |
-| `constants.h` | `MAX_NAME_LEN`、`CHUNK_SIZE`、协议版本号等共享常量 |
-| `crypto_utils.h` | SHA-256 + salt 哈希、哈希验证 |
-
-### 4.2 PDU v2 格式
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   PDU Header（16 字节）               │
-│  total_length : uint32_t  — 整包字节数（含头部）      │
-│  body_length  : uint32_t  — body 区字节数             │
-│  message_type : uint32_t  — MessageType 枚举值        │
-│  reserved     : uint32_t  — 预留（版本/标志位）        │
-├─────────────────────────────────────────────────────┤
-│                   Body（变长）                        │
-│  各消息类型自定义格式，见 api.md                       │
-└─────────────────────────────────────────────────────┘
-```
-
-- 取消原 `caData[64]` 固定区，所有参数统一放入 body
-- body 起始 4 字节为 `uint32_t status_code`（仅响应消息）
-- 字符串字段均以固定长度（`MAX_NAME_LEN = 32`）或 `length + data` 形式编码
-
-### 4.3 依赖关系
-
-```
-common（静态库，无第三方依赖）
-  ├── 被 server 链接
-  └── 被 client 链接
-
-server 依赖：common, libmysqlclient, spdlog, nlohmann/json, pthread, OpenSSL
-client 依赖：common, Qt6::Widgets, Qt6::Network, Qt6::Sql（可选）
-```
-
----
-
-## 5. 关键业务数据流
-
-### 5.1 文件上传（普通文件）
-
-```
-客户端                                        服务端
-   │                                            │
-   ├─ UPLOAD_FILE_REQUEST ──────────────────►  │
-   │  body: [filename][filesize][dir_path]      │ FileHandler::handleUploadFile()
-   │                                            │ ├── 校验路径（防遍历）
-   │                                            │ └── 打开目标文件（ofstream）
-   │  ◄────────────────── UPLOAD_FILE_RESPOND ─┤
-   │  body: [status_code]                       │
-   │                                            │
-   ├─ UPLOAD_FILE_DATA ─────────────────────►  │
-   │  body: [chunk_data(≤4MB)]                  │ FileHandler::handleUploadFileData()
-   │  （循环发送直到文件结束）                    │ └── 写入文件，累计接收字节
-   │                                            │
-   ├─ UPLOAD_FILE_DATA ─────────────────────►  │
-   │  ...                                       │ 接收完毕 → 关闭文件
-   │                                            │
-   │  ◄──────────────── UPLOAD_FILE_DATA_RESP ─┤
-   │  body: [status_code]                       │
-```
-
-### 5.2 聊天消息转发（含离线处理）
-
-```
-发送方                        服务端                         接收方
-   │                            │                              │
-   ├─ CHAT_REQUEST ──────────► │                              │
-   │  body:[sender][target][msg]│                              │
-   │                            │ ChatHandler::handleChat()    │
-   │                            │ SessionManager::findByName() │
-   │                            │                              │
-   │                            │ [在线] ─────────────────────►│
-   │                            │        CHAT_RESPOND          │
-   │                            │        body:[sender][msg]    │
-   │                            │                              │
-   │                            │ [离线] → 写入 offline_message│
-   │                            │          表，待对方登录时投递  │
-```
-
-### 5.3 好友请求流程
-
-```
-发起方                        服务端                          目标方
-   │                            │                              │
-   ├─ ADD_FRIEND_REQUEST ──────►│                              │
-   │  body:[me][target]         │                              │
-   │                            │ FriendHandler::handleAddFriend()
-   │                            │ ├── 检查是否已是好友          │
-   │                            │ ├── 检查目标是否在线          │
-   │                            │ └── [在线] ─────────────────►│
-   │                            │    转发 ADD_FRIEND_REQUEST   │
-   │  ◄── ADD_FRIEND_RESPOND ───│                              │
-   │                            │                              │
-   │                            │         ◄── AGREE_ADD_FRIEND_REQUEST
-   │                            │                              │
-   │                            │ FriendHandler::handleAgreeAddFriend()
-   │                            │ └── DB 插入好友记录           │
-   │  ◄── AGREE_ADD_FRIEND_RESP─│                              │
-   │  （通知发起方添加成功）       │   ─ AGREE_ADD_FRIEND_RESP ──►│
-```
-
----
-
-## 6. 安全架构
-
-### 6.1 密码安全链路
-
-```
-客户端输入明文密码
-      │
-      ▼ crypto_utils::hash(password)  （common 库，客户端执行）
-      │ SHA-256(random_salt + password)
-      ▼
-TLS 加密传输 → 服务端收到 password_hash
-      │
-      ▼ UserRepository::verifyPassword()
-      │ 取出 DB 中的 stored_hash
-      │ 重新计算 SHA-256(stored_salt + received_hash)
-      │ 时序安全比较（防时序攻击）
-      ▼
-登录结果
-```
-
-### 6.2 路径遍历防护（FileStorage）
-
-```cpp
-// 所有文件操作前调用
-std::filesystem::path FileStorage::safePath(
-    const std::string& user_root,
-    const std::string& relative_path)
-{
-    auto canonical = std::filesystem::weakly_canonical(user_root / relative_path);
-    auto root      = std::filesystem::weakly_canonical(user_root);
-    // 确保结果路径以 user_root 为前缀
-    if (!canonical.string().starts_with(root.string())) {
-        throw SecurityException("Path traversal detected");
-    }
-    return canonical;
-}
-```
-
-### 6.3 TLS 配置
-
-- 服务端：OpenSSL `SSL_CTX`，加载证书和私钥（路径配置在 `server.json`）
-- 客户端：`QSslSocket`，可配置是否验证服务端证书（开发环境可关闭，生产环境开启）
-
----
-
-## 7. 构建系统
-
-### 7.1 CMake 结构
-
-客户端（Windows）和服务端（Linux）**各自独立构建**，没有统一顶层 CMakeLists.txt。
-两者通过相对路径共享 `common/` 静态库。
-
-```
+```text
 CloudVault/
 ├── common/
-│   └── CMakeLists.txt          → 静态库 cloudvault_common
-│                                 （两端各自 add_subdirectory 引入）
+│   ├── include/common/
+│   │   ├── protocol.h
+│   │   ├── protocol_codec.h
+│   │   └── crypto_utils.h
+│   ├── src/
+│   └── tests/
 ├── server/
-│   └── CMakeLists.txt          → 可执行文件 cloudvault_server
-│                                 add_subdirectory(../common)
-│                                 add_subdirectory(tests)  [-DBUILD_TESTING=ON]
-└── client/
-    └── CMakeLists.txt          → 可执行文件 cloudvault_client
-                                  add_subdirectory(../common)
+│   ├── config/
+│   │   └── server.example.json
+│   ├── include/server/
+│   │   ├── server_app.h
+│   │   ├── event_loop.h
+│   │   ├── tcp_server.h
+│   │   ├── tcp_connection.h
+│   │   ├── thread_pool.h
+│   │   ├── session_manager.h
+│   │   ├── message_dispatcher.h
+│   │   ├── file_storage.h
+│   │   ├── db/
+│   │   │   ├── database.h
+│   │   │   ├── user_repository.h
+│   │   │   ├── friend_repository.h
+│   │   │   ├── chat_repository.h
+│   │   │   └── group_repository.h
+│   │   └── handler/
+│   │       ├── auth_handler.h
+│   │       ├── friend_handler.h
+│   │       ├── chat_handler.h
+│   │       ├── group_handler.h
+│   │       ├── file_handler.h
+│   │       └── share_handler.h
+│   ├── src/
+│   ├── sql/
+│   └── tests/
+├── client/
+│   ├── config/
+│   │   └── client.example.json
+│   ├── resources/
+│   │   ├── icons/app_icon.png
+│   │   ├── styles/style.qss
+│   │   └── resources.qrc
+│   └── src/
+│       ├── main.cpp
+│       ├── app.h / app.cpp
+│       ├── network/
+│       │   ├── tcp_client.*
+│       │   └── response_router.*
+│       ├── service/
+│       │   ├── auth_service.*
+│       │   ├── friend_service.*
+│       │   ├── chat_service.*
+│       │   ├── group_service.*
+│       │   ├── file_service.*
+│       │   └── share_service.*
+│       └── ui/
+│           ├── login_window.*
+│           ├── main_window.*
+│           ├── sidebar_panel.*
+│           ├── chat_panel.*
+│           ├── file_panel.*
+│           ├── contact_panel.*
+│           ├── profile_panel.*
+│           ├── widget_helpers.h
+│           ├── online_user_dialog.*
+│           ├── share_file_dialog.*
+│           └── group_list_dialog.*
+└── docs/
 ```
 
-**构建方式：**
+说明：
 
-```bash
-# 服务端（Linux）
-cd server
-cmake -B build -G Ninja
-cmake --build build
-
-# 客户端（Windows，需已安装 Qt 6）
-cd client
-cmake -B build -G "Visual Studio 17 2022"
-cmake --build build --config Release
-```
-
-### 7.2 第三方依赖
-
-| 库 | 版本 | 引入方式 | 用于 |
-|----|------|---------|------|
-| spdlog | ≥1.11 | FetchContent | server — 日志 |
-| nlohmann/json | ≥3.11 | FetchContent | server — 配置文件解析 |
-| OpenSSL | ≥3.0 | find_package | server + common — TLS、SHA-256 |
-| libmysqlclient | ≥8.0 | find_package（自定义） | server — MySQL 连接 |
-| Google Test | ≥1.14 | FetchContent | server/tests — 单元/集成测试 |
-| Qt6 | ≥6.2 | find_package | client 专用 — UI、网络、文件 |
+- 当前仓库没有顶层 `CMakeLists.txt`
+- `common`、`server`、`client` 独立构建
+- 这符合“服务端在 Linux 构建，客户端在 Windows 构建”的现阶段目标
 
 ---
 
-## 8. 部署拓扑
+## 3. 共享协议库 `common`
 
-### 8.1 裸机部署（最小化）
+### 3.1 职责
 
-```
-┌─────────────────────────────────────────┐
-│              Linux 服务器                │
-│                                         │
-│  cloudvault_server  ←→  MySQL 8.0        │
-│  监听 :5000 (TLS)       数据库: cloudvault │
-│                                         │
-│  文件存储: /data/cloudvault/filesys/       │
-└─────────────────────────────────────────┘
-         ↑ TLS TCP
-┌────────┴────────┐
-│  Windows 客户端  │  ×N
-└─────────────────┘
-```
+| 模块 | 当前职责 |
+|------|----------|
+| `protocol.h` | 消息类型枚举、PDU 头部、协议常量 |
+| `protocol_codec.h` | PDU 构建和拆包 |
+| `crypto_utils.h` | SHA-256 + salt 哈希与校验 |
 
-### 8.2 Docker Compose 部署
+### 3.2 协议现状
 
-```yaml
-services:
-  db:
-    image: mysql:8.0
-    volumes: [ "db_data:/var/lib/mysql" ]
-    environment:
-      MYSQL_DATABASE: cloudvault
-      MYSQL_USER: cloudvault_app
-      MYSQL_PASSWORD_FILE: /run/secrets/db_password
+- PDU 头部固定 16 字节
+- 所有多字节字段使用网络字节序
+- 文件分片常量、消息类型、头部定义目前统一放在 `protocol.h`
+- 当前并未拆分为 `message_types.h`、`constants.h` 等多个头文件
 
-  server:
-    build: ./server
-    ports: [ "5000:5000" ]
-    depends_on: [ db ]
-    volumes:
-      - "file_data:/data/filesys"
-      - "./config/server.json:/etc/cloudvault/server.json:ro"
-    secrets: [ db_password, tls_cert, tls_key ]
-```
+### 3.3 当前消息类型覆盖
+
+当前代码已覆盖：
+
+- 认证：注册、登录、登出
+- 资料：昵称、签名同步
+- 好友：查找、申请、同意、删除、刷新好友列表
+- 聊天：单聊、群聊、私聊历史消息
+- 群组：创建、加入、退出、拉取群列表
+- 文件管理：列表、建目录、重命名、移动、删除、搜索
+- 文件传输：上传、下载
+- 文件分享：分享请求、分享接受
 
 ---
 
-## 9. 与 v1 的主要差异
+## 4. 服务端架构
 
-| 方面 | v1 | v2 |
-|------|----|----|
-| 服务端框架 | Qt（QWidget + QTcpServer） | 纯 C++（epoll + std::thread） |
-| 构建系统 | qmake | CMake 3.20+ |
-| 协议 | PDU（caData[64] + malloc/free） | PDU v2（16字节头 + 变长body，RAII） |
-| 数据库操作 | 字符串拼接 SQL（注入漏洞） | 预处理语句 |
-| 密码 | 明文存储和传输 | SHA-256 + salt，传输前客户端哈希 |
-| 线程模型 | QRunnable + moveToThread（错误用法） | 主线程 epoll I/O + 工作线程业务逻辑 |
-| 客户端架构 | 单例 + UI 直接操作 PDU | 三层分离（network/service/ui） |
-| 协议代码 | 双端各一份（重复） | 单一 common 静态库 |
-| 安全 | 无 TLS，无路径校验 | TLS + 路径遍历防护 + 输入校验 |
-| 新功能 | — | 文件下载/删除/重命名、离线消息、群聊、大文件分片 |
+### 4.1 设计原则
+
+- 服务端不依赖 Qt
+- 主线程负责 I/O，多线程负责业务处理
+- Handler 聚焦协议解析和业务编排
+- Repository 聚焦 MySQL 访问
+- 文件系统操作统一收敛到 `FileStorage`
+
+### 4.2 核心模块
+
+| 模块 | 当前职责 |
+|------|----------|
+| `ServerApp` | 启动入口，加载 JSON 配置，初始化日志、数据库、文件存储、网络层和各 Handler |
+| `EventLoop` | epoll 事件循环 |
+| `TcpServer` | 监听端口并接收新连接 |
+| `TcpConnection` | 单连接收发、PDU 拆包、关闭回调 |
+| `ThreadPool` | 工作线程池 |
+| `MessageDispatcher` | 按 `MessageType` 分发消息 |
+| `SessionManager` | 在线会话管理 |
+| `Database` | MySQL 连接池，RAII 借还连接 |
+| `UserRepository` | 用户认证、在线状态等 |
+| `FriendRepository` | 好友关系和好友请求 |
+| `ChatRepository` | 私聊、群聊、离线消息与历史持久化 |
+| `GroupRepository` | 群组与群成员存取 |
+| `FileStorage` | 物理文件和目录操作 |
+| `AuthHandler` | 注册、登录、登出、资料更新、离线消息投递 |
+| `FriendHandler` | 好友查找、申请、同意、删除、刷新 |
+| `ChatHandler` | 单聊消息、私聊历史消息 |
+| `GroupHandler` | 建群、入群、退群、群列表、群聊广播 |
+| `FileHandler` | 文件管理、上传、下载 |
+| `ShareHandler` | 文件分享与接收 |
+
+### 4.3 启动流程
+
+`ServerApp::init()` 当前负责：
+
+1. 读取 `server.example.json` 风格的配置文件
+2. 初始化日志
+3. 创建 `Database` 连接池
+4. 创建 `FileStorage`
+5. 创建 `EventLoop`、`ThreadPool`、`TcpServer`
+6. 创建各类 Handler
+7. 注册消息路由到 `MessageDispatcher`
+
+当前没有独立的 `Config` 类，配置解析直接在 `ServerApp` 中完成。
+
+### 4.4 请求处理链路
+
+```text
+客户端发包
+  ↓
+TcpConnection::onReadable()
+  ↓
+PDU 完整后提交到 ThreadPool
+  ↓
+MessageDispatcher::dispatch()
+  ↓
+具体 Handler
+  ├── Repository / Database
+  ├── SessionManager
+  └── FileStorage
+  ↓
+构建响应 PDU
+  ↓
+TcpConnection::send()
+  ↓
+EventLoop 可写事件发送
+```
+
+### 4.5 线程模型
+
+| 线程 | 职责 |
+|------|------|
+| 主线程 | accept、读 socket、写 socket、epoll 调度 |
+| 工作线程池 | 数据库查询、文件操作、业务处理 |
+
+关键约束：
+
+- 工作线程不直接操作 epoll
+- 响应通过 `TcpConnection` 的线程安全发送路径回到主线程输出
+
+### 4.6 连接与会话
+
+- 登录成功后，`SessionManager` 记录用户与连接映射
+- 连接关闭时，服务端会清理会话并回收上传上下文
+- 显式 `LOGOUT` 也会同步更新数据库在线状态
+
+### 4.7 当前实现状态
+
+已落地：
+
+- 聊天与文件相关路由均已注册
+- 上传/下载链路已接通
+- `Database::Connection` 已改为只可移动，不可拷贝
+- MySQL deprecated reconnect 警告已移除
+
+仍待完善：
+
+- TLS 传输层
+- 更完整的服务端业务测试覆盖
+
+---
+
+## 5. 客户端架构
+
+### 5.1 分层
+
+当前客户端已经收敛为：
+
+```text
+UI 层
+  ├── LoginWindow
+  ├── MainWindow
+  ├── SidebarPanel / ChatPanel / FilePanel / ContactPanel / ProfilePanel
+  └── OnlineUserDialog / ShareFileDialog / GroupListDialog
+
+Service 层
+  ├── AuthService
+  ├── FriendService
+  ├── ChatService
+  ├── GroupService
+  ├── FileService
+  └── ShareService
+
+Network 层
+  ├── TcpClient
+  └── ResponseRouter
+```
+
+### 5.2 `App` 装配层
+
+当前客户端已有明确的应用装配入口 `App`：
+
+- 创建 `TcpClient`
+- 创建 `ResponseRouter`
+- 创建全部 Service
+- 创建 `LoginWindow`
+- 登录成功后创建 `MainWindow`
+- 监听 socket 连接状态
+- 负责断线横幅和自动重连触发
+
+也就是说，`LoginWindow` 已不再承担应用装配职责。
+
+### 5.3 `LoginWindow`
+
+职责：
+
+- 服务器配置读取
+- 连接服务器
+- 登录/注册输入与校验
+- 注册响应处理、登录响应处理
+- 登录成功后发出 `loginSucceeded`
+
+当前界面保留“昵称”输入框，但注册请求实际仍只提交用户名和密码；昵称尚未进入协议和后端存储。
+
+### 5.4 `MainWindow`
+
+当前 `MainWindow` 已经从“大而全页面类”收敛成壳层协调器，主要负责：
+
+- 顶层布局和底部导航
+- 三个主 Tab 切换
+- 各 Service 信号连接
+- 跨面板状态同步
+- 上传/下载/分享等主业务动作
+- 连接横幅与事件日志
+
+### 5.5 主窗口面板拆分
+
+| 面板 | 当前职责 |
+|------|----------|
+| `SidebarPanel` | 左侧栏标题、搜索、联系人列表、选择态 |
+| `ChatPanel` | 聊天中栏、消息列表绘制、空态、私聊与群聊统一布局、输入框与发送动作 |
+| `FilePanel` | 文件中栏、路径栏、搜索、文件列表、底部操作栏、传输进度 |
+| `ContactPanel` | 右侧联系人/群组详情与操作入口 |
+| `ProfilePanel` | “我”页个人信息卡片、保存/取消/退出登录 |
+
+### 5.6 客户端流程
+
+```text
+应用启动
+  ↓
+App 创建 TcpClient / Router / Service / LoginWindow
+  ↓
+用户登录成功
+  ↓
+App 创建 MainWindow
+  ↓
+MainWindow 触发刷新好友列表
+  ↓
+用户在消息/文件/我 三个主 Tab 间切换
+```
+
+### 5.7 网络状态反馈
+
+当前客户端已经实现：
+
+- 顶部断线横幅
+- 事件日志栏
+- 自动重连尝试
+
+这些逻辑由 `App` 与 `MainWindow` 协作完成，而不是散落在多个窗口里。
+
+### 5.8 当前 UI 状态
+
+已实现：
+
+- 三栏主界面
+- 聊天气泡绘制
+- 文件管理与上传下载
+- 右侧联系人详情
+- 个人信息页
+- 在线用户弹窗
+- 分享文件弹窗
+- 群组列表弹窗
+
+占位或未完成：
+
+- 客户端自动化测试尚未接入
+
+---
+
+## 6. 当前架构与旧文档差异
+
+下面这些内容以当前代码为准：
+
+- 无 TLS
+- 客户端已有 `App`
+- `service/` 已从 `network/` 中拆出，包含 `GroupService`
+- 主界面已拆分为多个 Panel，而不是把所有 UI 塞进 `MainWindow`
+- 聊天面板统一为 `ChatPanel`（单/群聊共用布局）
+- 右侧详情面板为 `ContactPanel`，旧版 `DetailPanel` 已删除
+- 共用 UI 工具函数收敛于 `widget_helpers.h`
+- “我”页当前是 `ProfilePanel`，不是 `ProfileDialog`
+- `MessageDispatcher` 位于 `server/include/server/message_dispatcher.h`
+- 服务端配置解析位于 `ServerApp`，不是独立 `Config` 类
+
+---
+
+## 7. 后续建议
+
+如果下一阶段继续向更完整工程化靠拢，建议优先做：
+
+1. 客户端昵称字段真正入协议、入库
+2. 为服务端 Handler 引入更可测试的注入 seam
+3. 增加 Linux 服务端 CI 构建与测试
+4. 如有安全要求，再补 TLS 传输层

@@ -66,7 +66,7 @@ LoginWindow 更新 UI
 
 ### 8.3.1 初始化脚本
 
-数据库初始化脚本位于 [server/sql/init.sql](/mnt/d/CloudVault/server/sql/init.sql)。
+数据库初始化脚本位于 `server/sql/init.sql`。
 
 脚本完成以下工作：
 
@@ -85,7 +85,7 @@ mysql -u root -p < server/sql/init.sql
 或：
 
 ```bash
-mysql -u root -P 3307 -h 127.0.0.1 -p < server/sql/init.sql
+mysql -u root -P 3308 -h 127.0.0.1 -p < server/sql/init.sql
 ```
 
 ### 8.3.2 用户表
@@ -116,7 +116,7 @@ CREATE TABLE IF NOT EXISTS user_info (
 
 ### 8.4.1 服务端配置
 
-服务端示例配置位于 [server.example.json](/mnt/d/CloudVault/server/config/server.example.json)：
+服务端示例配置位于 `server/config/server.example.json`：
 
 ```json
 {
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS user_info (
     },
     "database": {
         "host": "127.0.0.1",
-        "port": 3306,
+        "port": 3308,
         "name": "cloudvault",
         "user": "cloudvault_app",
         "password_env": "CLOUDVAULT_DB_PASSWORD"
@@ -140,13 +140,13 @@ CREATE TABLE IF NOT EXISTS user_info (
 1. 优先读取 `database.password_env` 指向的环境变量
 2. 如果环境变量不存在，再回退读取 `database.password`
 
-对应实现见 [server_app.cpp](/mnt/d/CloudVault/server/src/server_app.cpp#L103)。
+对应实现见 `server/src/server_app.cpp`。
 
 如果 `password_env` 指向的环境变量没有设置，启动日志会直接告警，避免出现“密码为空但原因不明”的排查成本。
 
 ### 8.4.2 客户端配置
 
-客户端现在不再硬编码服务器地址，而是必须从配置文件读取。示例文件位于 [client.example.json](/mnt/d/CloudVault/client/config/client.example.json)：
+客户端现在不再硬编码服务器地址，而是必须从配置文件读取。示例文件位于 `client/config/client.example.json`：
 
 ```json
 {
@@ -165,7 +165,7 @@ CREATE TABLE IF NOT EXISTS user_info (
 
 只要找到一个合法配置，就会建立连接；如果所有配置都不存在或内容非法，客户端会进入“配置错误”状态，并禁用登录/注册按钮。
 
-对应实现见 [login_window.cpp](/mnt/d/CloudVault/client/src/ui/login_window.cpp#L424)。
+对应实现见 `client/src/ui/login_window.cpp`。
 
 ---
 
@@ -206,7 +206,7 @@ username      : string   (uint16 长度前缀 + UTF-8)
 password_hash : fixed64  (客户端 hashForTransport 结果)
 ```
 
-客户端构造逻辑见 [auth_service.cpp](/mnt/d/CloudVault/client/src/network/auth_service.cpp#L39)。
+客户端构造逻辑见 `client/src/service/auth_service.cpp`。
 
 ### 8.6.2 注册响应
 
@@ -250,7 +250,7 @@ message : string
 - `3`：该账号已在线
 - `4`：服务器错误或请求格式错误
 
-服务端协议解析与回包逻辑见 [auth_handler.cpp](/mnt/d/CloudVault/server/src/handler/auth_handler.cpp)。
+服务端协议解析与回包逻辑见 `server/src/handler/auth_handler.cpp`。
 
 ---
 
@@ -258,7 +258,7 @@ message : string
 
 ### 8.7.1 Database：MySQL 连接池
 
-[database.cpp](/mnt/d/CloudVault/server/src/db/database.cpp) 实现了一个最小可用连接池：
+`server/src/db/database.cpp` 实现了一个最小可用连接池：
 
 - 启动时预建 `pool_size` 个连接
 - 借出连接时阻塞等待
@@ -273,7 +273,7 @@ message : string
 
 ### 8.7.2 UserRepository：用户表访问层
 
-[user_repository.cpp](/mnt/d/CloudVault/server/src/db/user_repository.cpp) 负责 `user_info` 表操作：
+`server/src/db/user_repository.cpp` 负责 `user_info` 表操作：
 
 - `insertUser()`：注册新用户
 - `findByName()`：按用户名查询
@@ -289,7 +289,7 @@ message : string
 
 ### 8.7.3 SessionManager：在线会话管理
 
-[session_manager.cpp](/mnt/d/CloudVault/server/src/session_manager.cpp) 维护两张索引：
+`server/src/session_manager.cpp` 维护两张索引：
 
 - `by_id_`：`user_id -> Session`
 - `name_to_id_`：`username -> user_id`
@@ -302,7 +302,7 @@ message : string
 
 ### 8.7.4 AuthHandler：认证业务核心
 
-[auth_handler.cpp](/mnt/d/CloudVault/server/src/handler/auth_handler.cpp) 完成三类消息处理：
+`server/src/handler/auth_handler.cpp` 完成三类消息处理：
 
 - `handleRegister()`
 - `handleLogin()`
@@ -328,7 +328,7 @@ message : string
 
 ### 8.7.5 ServerApp：把认证接入总流程
 
-[server_app.cpp](/mnt/d/CloudVault/server/src/server_app.cpp) 在 `init()` 中完成：
+`server/src/server_app.cpp` 在 `init()` 中完成：
 
 1. 加载配置与日志
 2. 初始化数据库连接池
@@ -344,7 +344,7 @@ message : string
 
 ### 8.8.1 AuthService
 
-[auth_service.cpp](/mnt/d/CloudVault/client/src/network/auth_service.cpp) 是客户端认证协议封装层。
+`client/src/service/auth_service.cpp` 是客户端认证协议封装层。
 
 它负责：
 
@@ -366,7 +366,7 @@ message : string
 
 ### 8.8.2 LoginWindow
 
-[login_window.cpp](/mnt/d/CloudVault/client/src/ui/login_window.cpp) 在本章承担三件事：
+`client/src/ui/login_window.cpp` 在本章承担三件事：
 
 1. 从配置文件读取服务器地址
 2. 创建网络连接并发送 `PING`
@@ -387,7 +387,7 @@ message : string
 ### 8.9.1 初始化数据库
 
 ```bash
-mysql -u root -P 3307 -h 127.0.0.1 -p < server/sql/init.sql
+mysql -u root -P 3308 -h 127.0.0.1 -p < server/sql/init.sql
 ```
 
 ### 8.9.2 准备服务端配置
@@ -398,7 +398,7 @@ mysql -u root -P 3307 -h 127.0.0.1 -p < server/sql/init.sql
 {
     "database": {
         "host": "127.0.0.1",
-        "port": 3307,
+        "port": 3308,
         "name": "cloudvault",
         "user": "cloudvault_app",
         "password_env": "CLOUDVAULT_DB_PASSWORD",

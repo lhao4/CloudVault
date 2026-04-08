@@ -32,7 +32,7 @@
 - 支持离线消息补投
 - 支持历史消息加载
 - 支持联系人列表预览、时间和未读数更新
-- 不支持群聊
+- 群聊链路已在当前代码库中补入，但独立群聊历史协议仍未完成
 
 ---
 
@@ -78,7 +78,7 @@ AuthHandler 查询 offline_message
 
 ## 10.3 数据库设计
 
-当前初始化脚本位于 [init.sql](/mnt/d/CloudVault/server/sql/init.sql)。
+当前初始化脚本位于 `server/sql/init.sql`。
 
 ### 10.3.1 聊天记录表
 
@@ -127,7 +127,7 @@ CHAT
 GET_HISTORY
 ```
 
-定义位于 [protocol.h](/mnt/d/CloudVault/common/include/common/protocol.h)。
+定义位于 `common/include/common/protocol.h`。
 
 ### 10.4.1 CHAT
 
@@ -186,8 +186,8 @@ message : string
 
 ### 10.5.1 ChatRepository
 
-[chat_repository.h](/mnt/d/CloudVault/server/include/server/db/chat_repository.h) /
-[chat_repository.cpp](/mnt/d/CloudVault/server/src/db/chat_repository.cpp)
+`server/include/server/db/chat_repository.h` /
+`server/src/db/chat_repository.cpp`
 
 负责：
 
@@ -199,8 +199,8 @@ message : string
 
 ### 10.5.2 ChatHandler
 
-[chat_handler.h](/mnt/d/CloudVault/server/include/server/handler/chat_handler.h) /
-[chat_handler.cpp](/mnt/d/CloudVault/server/src/handler/chat_handler.cpp)
+`server/include/server/handler/chat_handler.h` /
+`server/src/handler/chat_handler.cpp`
 
 当前实现了两个入口：
 
@@ -232,7 +232,7 @@ message : string
 
 ### 10.5.3 登录后的离线消息补投
 
-补投逻辑放在 [auth_handler.cpp](/mnt/d/CloudVault/server/src/handler/auth_handler.cpp)：
+补投逻辑放在 `server/src/handler/auth_handler.cpp`：
 
 - 用户登录成功
 - 先返回 `LOGIN_RESPONSE`
@@ -244,7 +244,7 @@ message : string
 
 ### 10.5.4 ServerApp 接入
 
-[server_app.cpp](/mnt/d/CloudVault/server/src/server_app.cpp) 已注册：
+`server/src/server_app.cpp` 已注册：
 
 - `CHAT`
 - `GET_HISTORY`
@@ -255,8 +255,8 @@ message : string
 
 ### 10.6.1 ChatService
 
-[chat_service.h](/mnt/d/CloudVault/client/src/network/chat_service.h) /
-[chat_service.cpp](/mnt/d/CloudVault/client/src/network/chat_service.cpp)
+`client/src/service/chat_service.h` /
+`client/src/service/chat_service.cpp`
 
 负责：
 
@@ -273,7 +273,7 @@ message : string
 
 ### 10.6.2 MainWindow 消息页
 
-[main_window.cpp](/mnt/d/CloudVault/client/src/ui/main_window.cpp)
+`client/src/ui/main_window.cpp`
 
 消息页不再是静态样例，而是：
 

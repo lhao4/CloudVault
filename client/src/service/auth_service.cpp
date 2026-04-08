@@ -1,5 +1,5 @@
 // =============================================================
-// client/src/network/auth_service.cpp
+// client/src/service/auth_service.cpp
 // 认证服务实现
 // =============================================================
 
@@ -36,6 +36,12 @@ AuthService::AuthService(TcpClient& client,
         [this](const PDUHeader& hdr, const std::vector<uint8_t>& body) {
             onLoginResponse(hdr, body);
         });
+
+    router_.registerHandler(
+        MessageType::UPDATE_PROFILE_RESPONSE,
+        [this](const PDUHeader& hdr, const std::vector<uint8_t>& body) {
+            onUpdateProfileResponse(hdr, body);
+        });
 }
 
 // =============================================================
@@ -68,6 +74,19 @@ void AuthService::login(const QString& username, const QString& password) {
         .build();
 
     qCDebug(lcAuth) << "Sending LOGIN_REQUEST for" << username;
+    client_.send(std::move(pdu));
+}
+
+void AuthService::logout() {
+    qCDebug(lcAuth) << "Sending LOGOUT";
+    client_.send(PDUBuilder(MessageType::LOGOUT).build());
+}
+
+void AuthService::updateProfile(const QString& nickname, const QString& signature) {
+    auto pdu = PDUBuilder(MessageType::UPDATE_PROFILE_REQUEST)
+        .writeString(nickname.trimmed().toStdString())
+        .writeString(signature.trimmed().toStdString())
+        .build();
     client_.send(std::move(pdu));
 }
 
@@ -147,6 +166,34 @@ void AuthService::onLoginResponse(const PDUHeader& /*hdr*/,
         emit loginSuccess(user_id);
     } else {
         emit loginFailed(QString::fromStdString(message));
+    }
+}
+
+void AuthService::onUpdateProfileResponse(const PDUHeader&,
+                                          const std::vector<uint8_t>& body) {
+    if (body.empty()) {
+        emit profileUpdateFailed(QStringLiteral("服务器返回空响应"));
+        return;
+    }
+
+    size_t offset = 0;
+    const uint8_t status = body[offset++];
+
+    std::string message;
+    if (offset + 2 <= body.size()) {
+        uint16_t mlen = 0;
+        std::memcpy(&mlen, body.data() + offset, 2);
+        mlen = ntohs(mlen);
+        offset += 2;
+        if (offset + mlen <= body.size()) {
+            message.assign(reinterpret_cast<const char*>(body.data() + offset), mlen);
+        }
+    }
+
+    if (status == 0) {
+        emit profileUpdateSuccess();
+    } else {
+        emit profileUpdateFailed(QString::fromStdString(message));
     }
 }
 

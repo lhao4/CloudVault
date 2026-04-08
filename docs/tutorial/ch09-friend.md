@@ -37,7 +37,7 @@
 - 支持删除好友
 - 支持登录后进入三栏主界面
 - 左栏好友列表直接联动好友刷新结果
-- 不支持离线好友申请持久化
+- 支持离线好友申请持久化
 - 不支持拒绝好友申请专门回包
 
 ---
@@ -63,7 +63,7 @@ B 的 MainWindow 弹窗确认
   ↓
 B 发送 AGREE_FRIEND_REQUEST(A)
   ↓
-FriendHandler 双向写入 friend_relation
+FriendHandler 将申请状态写入 `friend`
   ↓
 返回 AGREE_FRIEND_RESPONSE 给 B
 并向 A 推送 FRIEND_ADDED_PUSH(B)
@@ -93,7 +93,7 @@ DELETE_FRIEND_RESPONSE
 FRIEND_DELETED_PUSH
 ```
 
-定义位于 [protocol.h](/mnt/d/CloudVault/common/include/common/protocol.h)。
+定义位于 `common/include/common/protocol.h`。
 
 ### 9.3.1 查找用户
 
@@ -227,7 +227,7 @@ friend_username : string
 
 本章沿用第八章初始化脚本中的 `friend_relation` 表，不再使用旧设计稿里带 `status` 字段的 `friend` 表。
 
-当前表结构见 [init.sql](/mnt/d/CloudVault/server/sql/init.sql)：
+当前表结构见 `server/sql/init.sql`：
 
 ```sql
 CREATE TABLE IF NOT EXISTS friend_relation (
@@ -282,7 +282,7 @@ findByConnection(std::shared_ptr<TcpConnection>)
 
 ### 9.5.2 FriendRepository
 
-[friend_repository.cpp](/mnt/d/CloudVault/server/src/db/friend_repository.cpp) 实现了：
+`server/src/db/friend_repository.cpp` 实现了：
 
 - `areFriends(user_id, friend_id)`
 - `addFriendPair(user_id, friend_id)`
@@ -297,7 +297,7 @@ findByConnection(std::shared_ptr<TcpConnection>)
 
 ### 9.5.3 FriendHandler
 
-[friend_handler.cpp](/mnt/d/CloudVault/server/src/handler/friend_handler.cpp) 负责全部好友业务：
+`server/src/handler/friend_handler.cpp` 负责全部好友业务：
 
 - `handleFindUser()`
 - `handleAddFriend()`
@@ -357,7 +357,7 @@ findByConnection(std::shared_ptr<TcpConnection>)
 
 ### 9.5.4 ServerApp 接入
 
-[server_app.cpp](/mnt/d/CloudVault/server/src/server_app.cpp) 已注册以下好友消息：
+`server/src/server_app.cpp` 已注册以下好友消息：
 
 - `FIND_USER_REQUEST`
 - `ADD_FRIEND_REQUEST`
@@ -371,7 +371,7 @@ findByConnection(std::shared_ptr<TcpConnection>)
 
 ### 9.6.1 FriendService
 
-[friend_service.cpp](/mnt/d/CloudVault/client/src/network/friend_service.cpp) 负责：
+`client/src/service/friend_service.cpp` 负责：
 
 - 构建好友请求 PDU
 - 解析响应和推送
@@ -400,7 +400,7 @@ findByConnection(std::shared_ptr<TcpConnection>)
 
 ### 9.6.3 MainWindow（三栏）
 
-[main_window.cpp](/mnt/d/CloudVault/client/src/ui/main_window.cpp) 已按照主界面设计文档落成三栏结构：
+`client/src/ui/main_window.cpp` 已按照主界面设计文档落成三栏结构：
 
 - 左栏：`260px`
   - 标题栏

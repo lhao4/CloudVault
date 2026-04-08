@@ -81,7 +81,7 @@ B 刷新文件列表后看到副本
 
 ## 13.3 协议设计
 
-当前实现使用 [protocol.h](/mnt/d/CloudVault/common/include/common/protocol.h) 中已有的四个消息类型：
+当前实现使用 `common/include/common/protocol.h` 中已有的四个消息类型：
 
 ```cpp
 SHARE_REQUEST
@@ -166,8 +166,8 @@ message : string
 
 ### 13.4.1 FileStorage 扩展
 
-[file_storage.h](/mnt/d/CloudVault/server/include/server/file_storage.h) /
-[file_storage.cpp](/mnt/d/CloudVault/server/src/file_storage.cpp)
+`server/include/server/file_storage.h` /
+`server/src/file_storage.cpp`
 
 第十三章在第十一章的文件系统封装基础上增加了两个接口：
 
@@ -191,8 +191,8 @@ message : string
 
 ### 13.4.2 ShareHandler
 
-[share_handler.h](/mnt/d/CloudVault/server/include/server/handler/share_handler.h) /
-[share_handler.cpp](/mnt/d/CloudVault/server/src/handler/share_handler.cpp)
+`server/include/server/handler/share_handler.h` /
+`server/src/handler/share_handler.cpp`
 
 这是本章的核心处理器。
 
@@ -254,7 +254,7 @@ receiver_username -> { sender + '\n' + file_path }
 
 ### 13.4.4 ServerApp 接入
 
-[server_app.cpp](/mnt/d/CloudVault/server/src/server_app.cpp) 已接入：
+`server/src/server_app.cpp` 已接入：
 
 - `ShareHandler` 初始化
 - `SHARE_REQUEST` 注册
@@ -267,8 +267,8 @@ receiver_username -> { sender + '\n' + file_path }
 
 ### 13.5.1 ShareService
 
-[share_service.h](/mnt/d/CloudVault/client/src/network/share_service.h) /
-[share_service.cpp](/mnt/d/CloudVault/client/src/network/share_service.cpp)
+`client/src/service/share_service.h` /
+`client/src/service/share_service.cpp`
 
 本章新增客户端分享服务层，职责是：
 
@@ -288,8 +288,8 @@ receiver_username -> { sender + '\n' + file_path }
 
 ### 13.5.2 ShareFileDialog
 
-[share_file_dialog.h](/mnt/d/CloudVault/client/src/ui/share_file_dialog.h) /
-[share_file_dialog.cpp](/mnt/d/CloudVault/client/src/ui/share_file_dialog.cpp)
+`client/src/ui/share_file_dialog.h` /
+`client/src/ui/share_file_dialog.cpp`
 
 这个弹窗在本章真正接入主流程。
 
@@ -302,8 +302,8 @@ receiver_username -> { sender + '\n' + file_path }
 
 ### 13.5.3 MainWindow 接入
 
-[main_window.h](/mnt/d/CloudVault/client/src/ui/main_window.h) /
-[main_window.cpp](/mnt/d/CloudVault/client/src/ui/main_window.cpp)
+`client/src/ui/main_window.h` /
+`client/src/ui/main_window.cpp`
 
 当前文件页新增了“分享”按钮：
 
@@ -328,8 +328,8 @@ receiver_username -> { sender + '\n' + file_path }
 
 ### 13.5.4 LoginWindow 注入
 
-[login_window.h](/mnt/d/CloudVault/client/src/ui/login_window.h) /
-[login_window.cpp](/mnt/d/CloudVault/client/src/ui/login_window.cpp)
+`client/src/ui/login_window.h` /
+`client/src/ui/login_window.cpp`
 
 登录成功后，主窗口现在会同时拿到：
 

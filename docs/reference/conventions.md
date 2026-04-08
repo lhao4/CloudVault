@@ -12,8 +12,6 @@ CloudVault/
 │   ├── CMakeLists.txt
 │   ├── include/
 │   │   └── common/
-│   │       ├── constants.h
-│   │       ├── message_types.h
 │   │       ├── protocol.h
 │   │       ├── protocol_codec.h
 │   │       └── crypto_utils.h
@@ -24,11 +22,11 @@ CloudVault/
 ├── server/                         # 服务端（Linux，纯 C++）
 │   ├── CMakeLists.txt
 │   ├── config/
-│   │   └── server.json.example
+│   │   ├── server.example.json
+│   │   └── server.json
 │   ├── include/
 │   │   └── server/
 │   │       ├── server_app.h
-│   │       ├── config.h
 │   │       ├── event_loop.h
 │   │       ├── tcp_server.h
 │   │       ├── tcp_connection.h
@@ -38,17 +36,20 @@ CloudVault/
 │   │       ├── db/
 │   │       │   ├── database.h
 │   │       │   ├── user_repository.h
-│   │       │   └── friend_repository.h
+│   │       │   ├── friend_repository.h
+│   │       │   ├── chat_repository.h
+│   │       │   └── group_repository.h
 │   │       └── handler/
-│   │           ├── message_dispatcher.h
 │   │           ├── auth_handler.h
 │   │           ├── friend_handler.h
 │   │           ├── chat_handler.h
-│   │           └── file_handler.h
+│   │           ├── group_handler.h
+│   │           ├── file_handler.h
+│   │           └── share_handler.h
 │   ├── src/
 │   │   ├── main.cpp
 │   │   ├── server_app.cpp
-│   │   ├── config.cpp
+│   │   ├── message_dispatcher.cpp
 │   │   ├── event_loop.cpp
 │   │   ├── tcp_server.cpp
 │   │   ├── tcp_connection.cpp
@@ -58,25 +59,26 @@ CloudVault/
 │   │   ├── db/
 │   │   │   ├── database.cpp
 │   │   │   ├── user_repository.cpp
-│   │   │   └── friend_repository.cpp
+│   │   │   ├── friend_repository.cpp
+│   │   │   ├── chat_repository.cpp
+│   │   │   └── group_repository.cpp
 │   │   └── handler/
-│   │       ├── message_dispatcher.cpp
 │   │       ├── auth_handler.cpp
 │   │       ├── friend_handler.cpp
 │   │       ├── chat_handler.cpp
-│   │       └── file_handler.cpp
+│   │       ├── group_handler.cpp
+│   │       ├── file_handler.cpp
+│   │       └── share_handler.cpp
 │   └── tests/
-│       ├── CMakeLists.txt
-│       ├── test_pdu.cpp
-│       └── test_crypto.cpp
+│       └── CMakeLists.txt
 │
 ├── client/                         # 客户端（Windows，Qt 6）
 │   ├── CMakeLists.txt
 │   ├── resources/
-│   │   ├── images.qrc
-│   │   └── images/
-│   │       ├── file.png
-│   │       └── folder.png
+│   │   ├── resources.qrc
+│   │   ├── icons/
+│   │   └── styles/
+│   │       └── style.qss
 │   └── src/
 │       ├── main.cpp
 │       ├── app.h
@@ -93,30 +95,38 @@ CloudVault/
 │       │   ├── friend_service.cpp
 │       │   ├── chat_service.h
 │       │   ├── chat_service.cpp
+│       │   ├── group_service.h
+│       │   ├── group_service.cpp
 │       │   ├── file_service.h
-│       │   └── file_service.cpp
+│       │   ├── file_service.cpp
+│       │   ├── share_service.h
+│       │   └── share_service.cpp
 │       └── ui/
+│           ├── widget_helpers.h
 │           ├── login_window.h
 │           ├── login_window.cpp
-│           ├── login_window.ui
 │           ├── main_window.h
 │           ├── main_window.cpp
-│           ├── main_window.ui
-│           ├── friend_widget.h
-│           ├── friend_widget.cpp
-│           ├── friend_widget.ui
-│           ├── file_widget.h
-│           ├── file_widget.cpp
-│           ├── file_widget.ui
-│           ├── chat_window.h
-│           ├── chat_window.cpp
-│           ├── chat_window.ui
+│           ├── chat_panel.h
+│           ├── chat_panel.cpp
+│           ├── file_panel.h
+│           ├── file_panel.cpp
+│           ├── contact_panel.h
+│           ├── contact_panel.cpp
+│           ├── sidebar_panel.h
+│           ├── sidebar_panel.cpp
+│           ├── profile_panel.h
+│           ├── profile_panel.cpp
+│           ├── group_list_dialog.h
+│           ├── group_list_dialog.cpp
 │           ├── online_user_dialog.h
 │           ├── online_user_dialog.cpp
-│           ├── online_user_dialog.ui
 │           ├── share_file_dialog.h
-│           ├── share_file_dialog.cpp
-│           └── share_file_dialog.ui
+│           └── share_file_dialog.cpp
+│
+├── docker-compose.mysql.yml        # 项目专用 MySQL 容器
+├── docs/
+│   └── PROJECT_MYSQL_CONTAINER.md
 │
 ├── docs/                           # 文档（MkDocs）
 ├── .github/

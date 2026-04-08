@@ -154,7 +154,7 @@ docs/
     ├── api.md
     ├── database.md
     ├── modules.md
-    ├── ui-flow.md
+    ├── client-ui-spec.md
     └── testing.md
 ```
 

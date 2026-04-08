@@ -9,7 +9,9 @@
 #include "server/tcp_connection.h"
 
 #include <arpa/inet.h>
+#include <chrono>
 #include <cstring>
+#include <ctime>
 #include <spdlog/spdlog.h>
 
 namespace cloudvault {
@@ -59,6 +61,21 @@ std::vector<uint8_t> buildFriendAddedPush(const std::string& username) {
         .build();
 }
 
+std::string nowTimestamp() {
+    using namespace std::chrono;
+    const auto now = system_clock::now();
+    const auto ms  = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+    const auto t   = system_clock::to_time_t(now);
+    std::tm tm{};
+    gmtime_r(&t, &tm);
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+                  tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                  tm.tm_hour, tm.tm_min, tm.tm_sec,
+                  static_cast<int>(ms.count()));
+    return buf;
+}
+
 std::vector<uint8_t> buildFriendDeletedPush(const std::string& username) {
     return PDUBuilder(MessageType::FRIEND_DELETED_PUSH)
         .writeString(username)
@@ -68,26 +85,7 @@ std::vector<uint8_t> buildFriendDeletedPush(const std::string& username) {
 } // namespace
 
 FriendHandler::FriendHandler(Database& db, SessionManager& sessions)
-    : users_(db), friends_(db), sessions_(sessions) {}
-
-bool FriendHandler::addPendingRequest(int target_user_id, int requester_user_id) {
-    std::lock_guard lock(pending_mutex_);
-    return pending_requests_[target_user_id].insert(requester_user_id).second;
-}
-
-bool FriendHandler::consumePendingRequest(int target_user_id, int requester_user_id) {
-    std::lock_guard lock(pending_mutex_);
-    auto it = pending_requests_.find(target_user_id);
-    if (it == pending_requests_.end()) {
-        return false;
-    }
-
-    const auto erased = it->second.erase(requester_user_id);
-    if (it->second.empty()) {
-        pending_requests_.erase(it);
-    }
-    return erased > 0;
-}
+    : users_(db), friends_(db), messages_(db), sessions_(sessions) {}
 
 void FriendHandler::handleFindUser(std::shared_ptr<TcpConnection> conn,
                                    const PDUHeader&,
@@ -152,19 +150,29 @@ void FriendHandler::handleAddFriend(std::shared_ptr<TcpConnection> conn,
         return;
     }
 
-    if (!sessions_.isOnline(target->username)) {
-        conn->send(buildStatusMessage(MessageType::ADD_FRIEND_RESPONSE,
-                                      kStatusOffline, "对方当前不在线"));
-        return;
-    }
-
-    if (!addPendingRequest(target->user_id, current->user_id)) {
+    if (friends_.hasPendingRequest(current->user_id, target->user_id)) {
         conn->send(buildStatusMessage(MessageType::ADD_FRIEND_RESPONSE,
                                       kStatusInvalid, "好友请求已发送，请等待对方处理"));
         return;
     }
 
-    sessions_.sendTo(target->username, buildFriendRequestPush(current->username));
+    // 持久化好友申请到数据库（status=0）
+    if (!friends_.insertRequest(current->user_id, target->user_id)) {
+        conn->send(buildStatusMessage(MessageType::ADD_FRIEND_RESPONSE,
+                                      kStatusInternal, "发送好友请求失败"));
+        return;
+    }
+
+    // 如果目标在线则实时推送，否则写入离线消息
+    if (sessions_.isOnline(target->username)) {
+        sessions_.sendTo(target->username, buildFriendRequestPush(current->username));
+    } else {
+        messages_.queueOfflineMessage(
+            current->user_id, target->user_id,
+            static_cast<uint32_t>(MessageType::FRIEND_REQUEST_PUSH),
+            current->username, nowTimestamp());
+    }
+
     conn->send(buildStatusMessage(MessageType::ADD_FRIEND_RESPONSE,
                                   kStatusOk, "好友请求已发送"));
 }
@@ -206,15 +214,10 @@ void FriendHandler::handleAgreeFriend(std::shared_ptr<TcpConnection> conn,
         return;
     }
 
-    if (!consumePendingRequest(current->user_id, requester->user_id)) {
+    // 通过 DB status 字段确认并接受申请
+    if (!friends_.acceptRequest(requester->user_id, current->user_id)) {
         conn->send(buildStatusMessage(MessageType::AGREE_FRIEND_RESPONSE,
                                       kStatusInvalid, "没有待处理的好友请求"));
-        return;
-    }
-
-    if (!friends_.addFriendPair(current->user_id, requester->user_id)) {
-        conn->send(buildStatusMessage(MessageType::AGREE_FRIEND_RESPONSE,
-                                      kStatusInternal, "添加好友失败"));
         return;
     }
 
@@ -244,7 +247,9 @@ void FriendHandler::handleFlushFriends(std::shared_ptr<TcpConnection> conn,
         .writeUInt16(static_cast<uint16_t>(friends.size()));
     for (const auto& item : friends) {
         response.writeString(item.username)
-            .writeUInt8(sessions_.isOnline(item.username) ? 1 : 0);
+            .writeString(item.nickname)
+            .writeString(item.signature)
+            .writeUInt8(item.is_online ? 1 : 0);
     }
     conn->send(response.build());
 }
@@ -280,7 +285,7 @@ void FriendHandler::handleDeleteFriend(std::shared_ptr<TcpConnection> conn,
         return;
     }
 
-    if (!friends_.removeFriendPair(current->user_id, target->user_id)) {
+    if (!friends_.removeFriend(current->user_id, target->user_id)) {
         conn->send(buildStatusMessage(MessageType::DELETE_FRIEND_RESPONSE,
                                       kStatusInternal, "删除好友失败"));
         return;

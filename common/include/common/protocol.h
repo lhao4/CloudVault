@@ -38,6 +38,8 @@ enum class MessageType : uint32_t {
     REGISTER_REQUEST    = 0x0103,
     REGISTER_RESPONSE   = 0x0104,
     LOGOUT              = 0x0105,
+    UPDATE_PROFILE_REQUEST  = 0x0106,
+    UPDATE_PROFILE_RESPONSE = 0x0107,
 
     // 好友（第九章）
     FIND_USER_REQUEST   = 0x0201,
@@ -78,6 +80,16 @@ enum class MessageType : uint32_t {
     SHARE_NOTIFY        = 0x0602,
     SHARE_AGREE_REQUEST = 0x0603,
     SHARE_AGREE_RESPOND = 0x0604,
+
+    // 群组管理
+    CREATE_GROUP_REQUEST    = 0x0701,
+    CREATE_GROUP_RESPONSE   = 0x0702,
+    JOIN_GROUP_REQUEST      = 0x0703,
+    JOIN_GROUP_RESPONSE     = 0x0704,
+    LEAVE_GROUP_REQUEST     = 0x0705,
+    LEAVE_GROUP_RESPONSE    = 0x0706,
+    GET_GROUP_LIST_REQUEST  = 0x0707,
+    GET_GROUP_LIST_RESPONSE = 0x0708,
 };
 
 // ── PDU 头部 ──────────────────────────────────────────────

@@ -8,12 +8,12 @@
 // =============================================================
 
 #include "login_window.h"
-#include "main_window.h"
 #include "ui_login_window.h"  // AUTOUIC 自动生成，路径在 cmake-build-debug/ 下
 
 #include "common/protocol.h"
 #include "common/protocol_codec.h"
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -22,7 +22,6 @@
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QLoggingCategory>
-#include <QPixmap>
 #include <QTimer>
 
 // 日志分类：运行时可通过 QT_LOGGING_RULES="ui.login=true" 环境变量启用
@@ -63,20 +62,21 @@ QString formatServerEndpoint(const QString& host, quint16 port) {
 // =============================================================
 // 构造函数
 // =============================================================
-LoginWindow::LoginWindow(QWidget* parent)
+LoginWindow::LoginWindow(cloudvault::TcpClient& tcp_client,
+                         cloudvault::ResponseRouter& router,
+                         cloudvault::AuthService& auth_service,
+                         QWidget* parent)
     : QWidget(parent)
     , ui_(std::make_unique<Ui::LoginWindow>())
-    , auth_service_(tcp_client_, router_, this)
-    , friend_service_(tcp_client_, router_, this)
-    , file_service_(tcp_client_, router_, this)
-    , share_service_(tcp_client_, router_, this)
+    , tcp_client_(tcp_client)
+    , router_(router)
+    , auth_service_(auth_service)
 {
     ui_->setupUi(this);
 
     setMinimumSize(400, 560);
     resize(400, 560);
-
-    ui_->iconLabel->setPixmap(QPixmap(":/icons/app_icon.png"));
+    setWindowIcon(QApplication::windowIcon());
 
     setupStyle();
     connectSignals();
@@ -115,13 +115,17 @@ void LoginWindow::setupStyle() {
         }
 
         QLabel#appIcon {
-            font-size: 36px;
+            font-size: 22px;
+            color: white;
+            background: @accent;
+            border-radius: 18px;
         }
 
         QLabel#appNameLabel {
             font-size: 20px;
             font-weight: bold;
             color: @txtPrimary;
+            font-family: "DM Sans", "PingFang SC", "Microsoft YaHei UI", sans-serif;
         }
 
         QLabel#appSubtitleLabel {
@@ -297,6 +301,17 @@ void LoginWindow::connectSignals() {
     connect(ui_->regConfirmToggleBtn, &QPushButton::toggled,
             this, &LoginWindow::toggleRegConfirmVisibility);
 
+    connect(ui_->loginUsernameEdit, &QLineEdit::returnPressed,
+            this, &LoginWindow::onLoginClicked);
+    connect(ui_->loginPasswordEdit, &QLineEdit::returnPressed,
+            this, &LoginWindow::onLoginClicked);
+    connect(ui_->regUsernameEdit, &QLineEdit::returnPressed,
+            this, &LoginWindow::onRegisterClicked);
+    connect(ui_->regPasswordEdit, &QLineEdit::returnPressed,
+            this, &LoginWindow::onRegisterClicked);
+    connect(ui_->regConfirmEdit, &QLineEdit::returnPressed,
+            this, &LoginWindow::onRegisterClicked);
+
     // AuthService 信号 → UI 槽
     connect(&auth_service_, &cloudvault::AuthService::registerSuccess,
             this, [this] {
@@ -316,47 +331,12 @@ void LoginWindow::connectSignals() {
 
     connect(&auth_service_, &cloudvault::AuthService::loginSuccess,
             this, [this](int userId) {
-                current_user_id_ = userId;
+                Q_UNUSED(userId);
                 ui_->loginStatusLabel->setText("登录成功");
                 ui_->loginStatusLabel->setStyleSheet("color: #16A34A;");
                 ui_->loginStatusLabel->show();
                 resetLoginBtn();
-
-                main_window_.reset();
-                main_window_ = std::make_unique<MainWindow>(
-                    current_username_, friend_service_, file_service_, share_service_);
-                connect(main_window_.get(), &MainWindow::windowClosed,
-                        this, [this] {
-                            tcp_client_.disconnectFromServer();
-                            QCoreApplication::quit();
-                        });
-                connect(main_window_.get(), &MainWindow::logoutRequested,
-                        this, [this] {
-                            if (main_window_) {
-                                main_window_->hide();
-                            }
-
-                            tcp_client_.disconnectFromServer();
-                            current_user_id_ = 0;
-                            ui_->loginPasswordEdit->clear();
-                            ui_->loginStatusLabel->setText("已退出登录");
-                            ui_->loginStatusLabel->setStyleSheet("color: #16A34A;");
-                            ui_->loginStatusLabel->show();
-                            show();
-                            raise();
-                            activateWindow();
-
-                            QTimer::singleShot(120, this, [this] {
-                                if (server_config_loaded_) {
-                                    tcp_client_.connectToServer(server_host_, server_port_);
-                                }
-                            });
-                        });
-                hide();
-                main_window_->show();
-                main_window_->raise();
-                main_window_->activateWindow();
-                friend_service_.flushFriends();
+                emit loginSucceeded(current_username_);
             });
 
     connect(&auth_service_, &cloudvault::AuthService::loginFailed,
@@ -397,7 +377,6 @@ void LoginWindow::onLoginClicked() {
 // =============================================================
 void LoginWindow::onRegisterClicked() {
     const QString username     = ui_->regUsernameEdit->text().trimmed();
-    const QString display_name = ui_->regDisplayNameEdit->text().trimmed();
     const QString password     = ui_->regPasswordEdit->text();
     const QString confirm      = ui_->regConfirmEdit->text();
 
@@ -407,9 +386,9 @@ void LoginWindow::onRegisterClicked() {
     };
 
     // 密码本身不 trim，但用 trimmed().isEmpty() 检测仅含空格的无效输入
-    if (username.isEmpty() || display_name.isEmpty() ||
+    if (username.isEmpty() ||
         password.trimmed().isEmpty() || confirm.trimmed().isEmpty()) {
-        showError("所有字段均为必填项");
+        showError("用户名和密码均为必填项");
         return;
     }
 
@@ -432,7 +411,7 @@ void LoginWindow::onRegisterClicked() {
     ui_->regBtn->setEnabled(false);
     ui_->regBtn->setText("注册中…");
 
-    qCDebug(lcLogin) << "准备注册：用户名 =" << username << "昵称 =" << display_name;
+    qCDebug(lcLogin) << "准备注册：用户名 =" << username;
     auth_service_.registerUser(username, password);
 }
 
@@ -557,7 +536,6 @@ void LoginWindow::registerHandlers() {
             ui_->serverDotLabel->setStyleSheet("color: #16A34A;");  // 绿色
         });
 
-    // TODO（第八章）：LOGIN_RESPONSE、REGISTER_RESPONSE
 }
 
 // =============================================================
@@ -598,4 +576,41 @@ void LoginWindow::applyConfigError(const QString& message) {
 
 QString LoginWindow::serverEndpoint() const {
     return formatServerEndpoint(server_host_, server_port_);
+}
+
+void LoginWindow::handleLoggedOut() {
+    ui_->loginPasswordEdit->clear();
+    ui_->loginStatusLabel->setText("已退出登录");
+    ui_->loginStatusLabel->setStyleSheet("color: #16A34A;");
+    ui_->loginStatusLabel->show();
+    show();
+    raise();
+    activateWindow();
+
+    QTimer::singleShot(120, this, [this] {
+        if (server_config_loaded_) {
+            tcp_client_.connectToServer(server_host_, server_port_);
+        }
+    });
+}
+
+void LoginWindow::reconnectToConfiguredServer(int delay_ms) {
+    if (!server_config_loaded_) {
+        return;
+    }
+
+    const auto connect_now = [this] {
+        tcp_client_.connectToServer(server_host_, server_port_);
+    };
+
+    if (delay_ms <= 0) {
+        connect_now();
+        return;
+    }
+
+    QTimer::singleShot(delay_ms, this, connect_now);
+}
+
+bool LoginWindow::hasServerConfig() const {
+    return server_config_loaded_;
 }

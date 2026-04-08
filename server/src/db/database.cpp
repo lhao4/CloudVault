@@ -47,10 +47,6 @@ MYSQL* Database::createConnection() {
     // 设置字符集为 utf8mb4（支持 emoji）
     mysql_options(conn, MYSQL_SET_CHARSET_NAME, "utf8mb4");
 
-    // 启用自动重连（短暂断线后自动恢复）
-    bool reconnect = true;
-    mysql_options(conn, MYSQL_OPT_RECONNECT, &reconnect);
-
     if (!mysql_real_connect(conn,
                             cfg_.host.c_str(),
                             cfg_.user.c_str(),
@@ -120,6 +116,28 @@ void Database::ping() {
 // =============================================================
 Database::Connection::Connection(MYSQL* conn, Database* pool)
     : conn_(conn), pool_(pool) {}
+
+Database::Connection::Connection(Connection&& other) noexcept
+    : conn_(other.conn_), pool_(other.pool_) {
+    other.conn_ = nullptr;
+    other.pool_ = nullptr;
+}
+
+Database::Connection& Database::Connection::operator=(Connection&& other) noexcept {
+    if (this == &other) {
+        return *this;
+    }
+
+    if (conn_ && pool_) {
+        pool_->returnConnection(conn_);
+    }
+
+    conn_ = other.conn_;
+    pool_ = other.pool_;
+    other.conn_ = nullptr;
+    other.pool_ = nullptr;
+    return *this;
+}
 
 Database::Connection::~Connection() {
     if (conn_ && pool_) {

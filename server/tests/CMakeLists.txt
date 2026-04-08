@@ -23,7 +23,19 @@ if(NOT TEST_SOURCES)
 endif()
 
 # ── 定义测试可执行文件 ────────────────────────────────────
-add_executable(cloudvault_server_tests ${TEST_SOURCES})
+set(SERVER_TEST_SUPPORT_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/event_loop.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/file_storage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/handler/file_handler.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/message_dispatcher.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/session_manager.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/tcp_connection.cpp
+)
+
+add_executable(cloudvault_server_tests
+    ${TEST_SOURCES}
+    ${SERVER_TEST_SUPPORT_SOURCES}
+)
 
 # ── 链接测试框架和被测库 ──────────────────────────────────
 target_link_libraries(cloudvault_server_tests
@@ -31,6 +43,8 @@ target_link_libraries(cloudvault_server_tests
         GTest::gtest_main
         GTest::gtest
         cloudvault_common
+        spdlog::spdlog
+        Threads::Threads
 )
 
 # ── 头文件路径 ────────────────────────────────────────────

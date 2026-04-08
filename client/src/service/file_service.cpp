@@ -1,9 +1,9 @@
 // =============================================================
-// client/src/network/file_service.cpp
+// client/src/service/file_service.cpp
 // 第十一、十二章：文件管理与文件传输协议封装
 // =============================================================
 
-#include "network/file_service.h"
+#include "service/file_service.h"
 
 #include "common/protocol.h"
 #include "common/protocol_codec.h"
@@ -155,31 +155,6 @@ void emitOperationResult(const std::vector<uint8_t>& body,
     }
 }
 
-QString uniqueFilePath(const QString& directory, const QString& filename) {
-    const QFileInfo info(filename);
-    const QString complete_name = info.fileName().isEmpty() ? QStringLiteral("download.bin")
-                                                            : info.fileName();
-    const QString base = QFileInfo(complete_name).completeBaseName();
-    const QString suffix = QFileInfo(complete_name).suffix();
-
-    QDir dir(directory);
-    QString candidate = dir.filePath(complete_name);
-    if (!QFileInfo::exists(candidate)) {
-        return candidate;
-    }
-
-    for (int i = 1; i < 1000; ++i) {
-        const QString numbered = suffix.isEmpty()
-            ? QStringLiteral("%1 (%2)").arg(base).arg(i)
-            : QStringLiteral("%1 (%2).%3").arg(base).arg(i).arg(suffix);
-        candidate = dir.filePath(numbered);
-        if (!QFileInfo::exists(candidate)) {
-            return candidate;
-        }
-    }
-    return dir.filePath(complete_name);
-}
-
 } // namespace
 
 FileService::FileService(TcpClient& client,
@@ -232,9 +207,9 @@ FileService::FileService(TcpClient& client,
 }
 
 void FileService::listFiles(const QString& path) {
-    pending_list_path_ = path.trimmed();
+    const QString normalized_path = path.trimmed();
     client_.send(PDUBuilder(MessageType::FLUSH_FILE)
-                     .writeString(pending_list_path_.toStdString())
+                     .writeString(normalized_path.toStdString())
                      .build());
 }
 
@@ -266,9 +241,9 @@ void FileService::deletePath(const QString& target_path) {
 }
 
 void FileService::search(const QString& keyword) {
-    pending_search_keyword_ = keyword.trimmed();
+    const QString normalized_keyword = keyword.trimmed();
     client_.send(PDUBuilder(MessageType::SEARCH_FILE)
-                     .writeString(pending_search_keyword_.toStdString())
+                     .writeString(normalized_keyword.toStdString())
                      .build());
 }
 
@@ -318,7 +293,7 @@ void FileService::uploadFile(const QString& local_path, const QString& remote_di
                      .build());
 }
 
-void FileService::downloadFile(const QString& remote_file_path, const QString& local_dir_path) {
+void FileService::downloadFile(const QString& remote_file_path, const QString& local_save_path) {
     if (hasActiveTransfer()) {
         emit downloadFailed(QStringLiteral("当前已有文件传输任务正在进行"));
         return;
@@ -329,14 +304,20 @@ void FileService::downloadFile(const QString& remote_file_path, const QString& l
         return;
     }
 
-    QDir dir(local_dir_path);
-    if (!dir.exists()) {
+    const QFileInfo save_info(local_save_path);
+    if (save_info.fileName().trimmed().isEmpty()) {
+        emit downloadFailed(QStringLiteral("保存文件名不能为空"));
+        return;
+    }
+
+    const QDir save_dir = save_info.dir();
+    if (!save_dir.exists()) {
         emit downloadFailed(QStringLiteral("本地保存目录不存在"));
         return;
     }
 
     download_.remote_file_path = remote_file_path.trimmed();
-    download_.local_dir_path = dir.absolutePath();
+    download_.local_save_path = save_info.absoluteFilePath();
     download_.waiting_for_init = true;
     download_.active = false;
     download_.received_bytes = 0;
@@ -519,7 +500,7 @@ void FileService::onDownloadInitResponse(const PDUHeader&, const std::vector<uin
 
     download_.filename = filename;
     download_.total_bytes = total_bytes;
-    download_.local_file_path = uniqueFilePath(download_.local_dir_path, filename);
+    download_.local_file_path = download_.local_save_path;
     download_.file.setFileName(download_.local_file_path);
     if (!download_.file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         client_.send(PDUBuilder(MessageType::DOWNLOAD_DATA)
@@ -647,7 +628,7 @@ void FileService::resetDownloadContext(bool remove_partial_file) {
     }
     download_.file.setFileName(QString());
     download_.remote_file_path.clear();
-    download_.local_dir_path.clear();
+    download_.local_save_path.clear();
     download_.local_file_path.clear();
     download_.filename.clear();
     download_.total_bytes = 0;

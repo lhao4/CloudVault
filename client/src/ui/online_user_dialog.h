@@ -5,22 +5,24 @@
 
 #pragma once
 
+#include "service/friend_service.h"
+
 #include <QDialog>
 #include <QList>
-#include <QPair>
 #include <QString>
 
 class QListWidget;
 class QPushButton;
 class QLineEdit;
+class QLabel;
 
 class OnlineUserDialog : public QDialog {
     Q_OBJECT
 
 public:
-    explicit OnlineUserDialog(const QList<QPair<QString, bool>>& users,
+    explicit OnlineUserDialog(const QList<cloudvault::FriendProfile>& users,
                               QWidget* parent = nullptr);
-    void setUsers(const QList<QPair<QString, bool>>& users);
+    void setUsers(const QList<cloudvault::FriendProfile>& users);
 
 signals:
     void refreshRequested();
@@ -31,7 +33,8 @@ private:
     void connectSignals();
     void populateList(const QString& keyword = QString());
 
-    QList<QPair<QString, bool>> users_;
+    QList<cloudvault::FriendProfile> users_;
+    QLabel* title_label_ = nullptr;
     QLineEdit* search_edit_ = nullptr;
     QListWidget* user_list_ = nullptr;
     QPushButton* refresh_btn_ = nullptr;
