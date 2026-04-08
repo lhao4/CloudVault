@@ -5,8 +5,8 @@
 // 负责：
 //   1. 加载并校验 JSON 配置文件
 //   2. 初始化 spdlog 日志系统（控制台 + 轮转文件）
-//   3. （第七章）初始化 EventLoop、TcpServer、ThreadPool、MessageDispatcher
-//   4. TODO（第八章）：初始化 Database 连接池、SessionManager
+//   3. 初始化 EventLoop、TcpServer、ThreadPool、MessageDispatcher
+//   4. 初始化 Database 连接池、SessionManager
 //   5. 启动事件循环，阻塞直到收到 SIGINT / SIGTERM
 //   6. 有序关闭所有资源（graceful shutdown）
 // =============================================================

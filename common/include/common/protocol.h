@@ -55,8 +55,6 @@ enum class MessageType : uint32_t {
     DELETE_FRIEND_REQUEST = 0x020B,
     DELETE_FRIEND_RESPONSE = 0x020C,
     FRIEND_DELETED_PUSH = 0x020D,
-    ONLINE_USER_REQUEST     = 0x020E,
-    ONLINE_USER_RESPONSE    = 0x020F,
 
     // 聊天（第十章）
     CHAT                = 0x0301,

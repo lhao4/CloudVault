@@ -536,7 +536,6 @@ void LoginWindow::registerHandlers() {
             ui_->serverDotLabel->setStyleSheet("color: #16A34A;");  // 绿色
         });
 
-    // TODO（第八章）：LOGIN_RESPONSE、REGISTER_RESPONSE
 }
 
 // =============================================================
