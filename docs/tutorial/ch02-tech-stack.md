@@ -18,7 +18,7 @@
 | 数据库 | MySQL 8.0 + libmysqlclient | 成熟可靠，C API 直接使用 |
 | 日志 | spdlog | 高性能，支持异步日志，格式清晰 |
 | 配置 | nlohmann/json | header-only，使用简单 |
-| 加密 | OpenSSL | SHA-256 哈希 + TLS 加密 |
+| 加密 | OpenSSL | SHA-256 哈希；TLS 作为后续规划保留 |
 | 构建 | CMake 3.20+ | 业界标准，跨平台 |
 
 ### 客户端
@@ -26,7 +26,7 @@
 | 技术 | 选型 | 理由 |
 |------|------|------|
 | 语言 | C++17 + Qt 6 | Qt 提供完整的 GUI 和网络库，跨平台 |
-| 网络 | QTcpSocket / QSslSocket | Qt 封装好的 TCP 客户端，与信号槽天然集成 |
+| 网络 | QTcpSocket | Qt 封装好的 TCP 客户端，与信号槽天然集成 |
 | 构建 | CMake 3.20+ + Qt 自动化工具 | 取代 qmake，与服务端统一构建体系 |
 
 ### 共享层（common）
@@ -52,7 +52,7 @@
 │  Network 层                      │
 │  TcpClient + ResponseRouter      │
 └────────────────┬────────────────┘
-                 │ TCP 长连接（TLS）
+                 │ TCP 长连接
                  │ 自定义二进制协议 PDU v2
 ┌────────────────┴────────────────┐
 │  服务端（Linux）                  │

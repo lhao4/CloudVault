@@ -102,7 +102,7 @@ FileStorage::inspectPath()
 
 ## 12.3 协议设计
 
-本章沿用 [protocol.h](/mnt/d/CloudVault/common/include/common/protocol.h) 中已有的四个消息类型：
+本章沿用 `common/include/common/protocol.h` 中已有的四个消息类型：
 
 ```cpp
 UPLOAD_REQUEST
@@ -144,7 +144,7 @@ chunk_size : uint32
 chunk_data : bytes
 ```
 
-当前分片大小常量位于 [protocol.h](/mnt/d/CloudVault/common/include/common/protocol.h)：
+当前分片大小常量位于 `common/include/common/protocol.h`：
 
 ```cpp
 FILE_TRANSFER_CHUNK_SIZE = 4 * 1024 * 1024
@@ -208,8 +208,8 @@ message : string
 
 ### 12.4.1 FileStorage 扩展
 
-[file_storage.h](/mnt/d/CloudVault/server/include/server/file_storage.h) /
-[file_storage.cpp](/mnt/d/CloudVault/server/src/file_storage.cpp)
+`server/include/server/file_storage.h` /
+`server/src/file_storage.cpp`
 
 第十二章没有新建第二套存储层，而是在第十一章基础上增加了两个传输辅助接口：
 
@@ -225,8 +225,8 @@ message : string
 
 ### 12.4.2 FileHandler 扩展
 
-[file_handler.h](/mnt/d/CloudVault/server/include/server/handler/file_handler.h) /
-[file_handler.cpp](/mnt/d/CloudVault/server/src/handler/file_handler.cpp)
+`server/include/server/handler/file_handler.h` /
+`server/src/handler/file_handler.cpp`
 
 新增入口：
 
@@ -274,7 +274,7 @@ struct UploadContext {
 
 ### 12.4.4 ServerApp 注册
 
-[server_app.cpp](/mnt/d/CloudVault/server/src/server_app.cpp) 已新增注册：
+`server/src/server_app.cpp` 已新增注册：
 
 - `UPLOAD_REQUEST`
 - `UPLOAD_DATA`
@@ -295,8 +295,8 @@ file_handler_->handleConnectionClosed(c);
 
 ### 12.5.1 FileService
 
-[file_service.h](/mnt/d/CloudVault/client/src/network/file_service.h) /
-[file_service.cpp](/mnt/d/CloudVault/client/src/network/file_service.cpp)
+`client/src/service/file_service.h` /
+`client/src/service/file_service.cpp`
 
 第十二章继续沿用第十一章的 `FileService`，不再拆新类。
 
@@ -344,8 +344,8 @@ file_handler_->handleConnectionClosed(c);
 
 ### 12.5.2 MainWindow 文件页
 
-[main_window.h](/mnt/d/CloudVault/client/src/ui/main_window.h) /
-[main_window.cpp](/mnt/d/CloudVault/client/src/ui/main_window.cpp)
+`client/src/ui/main_window.h` /
+`client/src/ui/main_window.cpp`
 
 文件页新增了：
 

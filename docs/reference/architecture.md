@@ -158,13 +158,13 @@ CloudVault/
 当前代码已覆盖：
 
 - 认证：注册、登录、登出
+- 资料：昵称、签名同步
 - 好友：查找、申请、同意、删除、刷新好友列表
-- 聊天：单聊、历史消息
+- 聊天：单聊、群聊、私聊历史消息
+- 群组：创建、加入、退出、拉取群列表
 - 文件管理：列表、建目录、重命名、移动、删除、搜索
 - 文件传输：上传、下载
 - 文件分享：分享请求、分享接受
-
-`GROUP_CHAT` 仅保留协议枚举，当前客户端/服务端还没有完整群聊业务链路。
 
 ---
 
@@ -192,11 +192,13 @@ CloudVault/
 | `Database` | MySQL 连接池，RAII 借还连接 |
 | `UserRepository` | 用户认证、在线状态等 |
 | `FriendRepository` | 好友关系和好友请求 |
-| `ChatRepository` | 历史消息持久化 |
+| `ChatRepository` | 私聊、群聊、离线消息与历史持久化 |
+| `GroupRepository` | 群组与群成员存取 |
 | `FileStorage` | 物理文件和目录操作 |
-| `AuthHandler` | 注册、登录、登出 |
+| `AuthHandler` | 注册、登录、登出、资料更新、离线消息投递 |
 | `FriendHandler` | 好友查找、申请、同意、删除、刷新 |
-| `ChatHandler` | 单聊消息、历史消息 |
+| `ChatHandler` | 单聊消息、私聊历史消息 |
+| `GroupHandler` | 建群、入群、退群、群列表、群聊广播 |
 | `FileHandler` | 文件管理、上传、下载 |
 | `ShareHandler` | 文件分享与接收 |
 

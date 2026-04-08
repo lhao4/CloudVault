@@ -83,7 +83,8 @@ nav:
     - 系统架构: reference/architecture.md
     - API 协议: reference/api.md
     - 数据库设计: reference/database.md
+    - MySQL 容器: PROJECT_MYSQL_CONTAINER.md
     - 模块划分: reference/modules.md
-    - UI 流程: reference/ui-flow.md
+    - 客户端 UI 规范: reference/client-ui-spec.md
     - 测试方案: reference/testing.md
     - 项目规范: reference/conventions.md
