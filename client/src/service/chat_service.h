@@ -18,6 +18,8 @@ namespace cloudvault {
  * @brief 聊天消息结构。
  */
 struct ChatMessage {
+    /// @brief 群组 ID（私聊时为 0）。
+    int group_id = 0;
     /// @brief 发送方用户名。
     QString from;
     /// @brief 接收方用户名。
@@ -59,6 +61,7 @@ public:
      * @param peer 联系人用户名。
      */
     void loadHistory(const QString& peer);
+    void loadGroupHistory(int groupId);
 
 signals:
     /// @brief 收到实时消息推送。
@@ -67,6 +70,8 @@ signals:
     void historyLoaded(const QString& peer, const QList<cloudvault::ChatMessage>& messages);
     /// @brief 历史消息加载失败。
     void historyLoadFailed(const QString& peer, const QString& reason);
+    /// @brief 群聊历史加载成功。
+    void groupHistoryLoaded(int groupId, const QList<cloudvault::ChatMessage>& messages);
 
 private:
     /**

@@ -57,6 +57,7 @@ public:
      * @brief 主动发送登出请求。
      */
     void logout();
+    void updateProfile(const QString& nickname, const QString& signature);
 
 signals:
     /// @brief 注册成功。
@@ -68,6 +69,10 @@ signals:
     void loginSuccess(int userId);
     /// @brief 登录失败。
     void loginFailed(const QString& reason);
+    /// @brief 资料更新成功。
+    void profileUpdateSuccess();
+    /// @brief 资料更新失败。
+    void profileUpdateFailed(const QString& reason);
 
 private:
     /**
@@ -82,6 +87,7 @@ private:
      * @param body 响应体。
      */
     void onLoginResponse   (const PDUHeader& hdr, const std::vector<uint8_t>& body);
+    void onUpdateProfileResponse(const PDUHeader& hdr, const std::vector<uint8_t>& body);
 
     /// @brief TCP 客户端引用。
     TcpClient&      client_;

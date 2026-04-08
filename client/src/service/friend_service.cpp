@@ -225,14 +225,24 @@ void FriendService::onFlushFriendsResponse(const PDUHeader&,
     count = ntohs(count);
     offset += 2;
 
-    QList<QPair<QString, bool>> friends;
+    QList<FriendProfile> friends;
     for (uint16_t i = 0; i < count; ++i) {
         std::string username;
-        if (!readString(body, offset, username) || offset >= body.size()) {
+        std::string nickname;
+        std::string signature;
+        if (!readString(body, offset, username)
+            || !readString(body, offset, nickname)
+            || !readString(body, offset, signature)
+            || offset >= body.size()) {
             emit friendListRefreshFailed(QStringLiteral("好友列表响应格式错误"));
             return;
         }
-        friends.append(qMakePair(QString::fromStdString(username), body[offset++] != 0));
+        FriendProfile profile;
+        profile.username = QString::fromStdString(username);
+        profile.nickname = QString::fromStdString(nickname);
+        profile.signature = QString::fromStdString(signature);
+        profile.online = body[offset++] != 0;
+        friends.append(profile);
     }
 
     emit friendsRefreshed(friends);

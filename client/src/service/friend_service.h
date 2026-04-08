@@ -9,11 +9,17 @@
 #include "network/tcp_client.h"
 
 #include <QObject>
-#include <QPair>
 #include <QString>
 #include <QList>
 
 namespace cloudvault {
+
+struct FriendProfile {
+    QString username;
+    QString nickname;
+    QString signature;
+    bool online = false;
+};
 
 /**
  * @brief 好友业务服务。
@@ -73,7 +79,7 @@ signals:
     /// @brief 添加好友失败。
     void friendAddFailed(const QString& reason);
     /// @brief 好友列表刷新成功。
-    void friendsRefreshed(const QList<QPair<QString, bool>>& friends);
+    void friendsRefreshed(const QList<FriendProfile>& friends);
     /// @brief 好友列表刷新失败。
     void friendListRefreshFailed(const QString& reason);
     /// @brief 删除好友成功。

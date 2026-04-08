@@ -11,6 +11,7 @@
 #include "service/chat_service.h"
 #include "service/file_service.h"
 #include "service/friend_service.h"
+#include "service/group_service.h"
 #include "service/share_service.h"
 
 #include <QObject>
@@ -92,6 +93,8 @@ private:
     cloudvault::ResponseRouter router_;
     /// @brief 认证服务。
     cloudvault::AuthService auth_service_;
+    /// @brief 群组服务。
+    cloudvault::GroupService group_service_;
     /// @brief 聊天服务。
     cloudvault::ChatService chat_service_;
     /// @brief 好友服务。

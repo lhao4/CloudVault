@@ -14,6 +14,7 @@
 App::App(QObject* parent)
     : QObject(parent)
     , auth_service_(tcp_client_, router_, this)
+    , group_service_(tcp_client_, router_, this)
     , chat_service_(tcp_client_, router_, this)
     , friend_service_(tcp_client_, router_, this)
     , file_service_(tcp_client_, router_, this)
@@ -45,7 +46,8 @@ void App::showMainWindow(const QString& username) {
     reconnect_pending_ = false;
     main_window_.reset();
     main_window_ = std::make_unique<MainWindow>(
-        username, chat_service_, friend_service_, file_service_, share_service_);
+        username, auth_service_, group_service_, chat_service_,
+        friend_service_, file_service_, share_service_);
 
     connect(main_window_.get(), &MainWindow::windowClosed,
             this, &App::handleMainWindowClosed);
@@ -61,6 +63,7 @@ void App::showMainWindow(const QString& username) {
     main_window_->activateWindow();
     main_window_->hideConnectionBanner();
     friend_service_.flushFriends();
+    group_service_.getGroupList();
 }
 
 void App::handleMainWindowClosed() {
