@@ -23,6 +23,7 @@
 #include "server/handler/auth_handler.h"
 #include "server/handler/chat_handler.h"
 #include "server/handler/friend_handler.h"
+#include "server/handler/group_handler.h"
 #include "server/handler/file_handler.h"
 #include "server/handler/share_handler.h"
 
@@ -93,6 +94,8 @@ private:
     std::unique_ptr<cloudvault::ChatHandler>   chat_handler_;
     /// @brief 好友处理器。
     std::unique_ptr<cloudvault::FriendHandler> friend_handler_;
+    /// @brief 群组处理器。
+    std::unique_ptr<cloudvault::GroupHandler>  group_handler_;
     /// @brief 文件处理器。
     std::unique_ptr<cloudvault::FileHandler>   file_handler_;
     /// @brief 分享处理器。

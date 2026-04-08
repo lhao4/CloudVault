@@ -3,9 +3,10 @@
 // 用户认证业务逻辑处理器
 //
 // 处理的 MessageType：
-//   REGISTER_REQUEST → 注册（格式校验 → 检查重名 → 存库）
-//   LOGIN_REQUEST    → 登录（查用户 → 验密码 → 防重复 → 注册会话）
-//   LOGOUT           → 登出（移除会话 → 更新 online 状态）
+//   REGISTER_REQUEST        → 注册（格式校验 → 检查重名 → 存库）
+//   LOGIN_REQUEST           → 登录（查用户 → 验密码 → 防重复 → 注册会话）
+//   LOGOUT                  → 登出（移除会话 → 更新 online 状态）
+//   UPDATE_PROFILE_REQUEST  → 更新个人资料（昵称 + 签名）
 // =============================================================
 
 #pragma once
@@ -66,6 +67,16 @@ public:
     void handleLogout(std::shared_ptr<TcpConnection>  conn,
                       const PDUHeader&                hdr,
                       const std::vector<uint8_t>&     body);
+
+    /**
+     * @brief 处理更新个人资料请求。
+     * @param conn 请求连接。
+     * @param hdr 协议头。
+     * @param body 协议体。
+     */
+    void handleUpdateProfile(std::shared_ptr<TcpConnection>  conn,
+                             const PDUHeader&                hdr,
+                             const std::vector<uint8_t>&     body);
 
 private:
     /**

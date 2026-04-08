@@ -6,14 +6,12 @@
 #pragma once
 
 #include "common/protocol.h"
+#include "server/db/chat_repository.h"
 #include "server/db/friend_repository.h"
 #include "server/db/user_repository.h"
 #include "server/session_manager.h"
 
-#include <mutex>
 #include <memory>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 namespace cloudvault {
@@ -24,6 +22,8 @@ class TcpConnection;
  * @brief 好友处理器。
  *
  * 负责用户查找、好友申请、同意申请、好友列表刷新与删除好友流程。
+ * 好友申请状态通过 friend 表的 status 字段持久化（0=待处理, 1=已添加），
+ * 支持离线好友申请。
  */
 class FriendHandler {
 public:
@@ -56,31 +56,14 @@ public:
                             const std::vector<uint8_t>& body);
 
 private:
-    /**
-     * @brief 记录挂起好友请求。
-     * @param target_user_id 目标用户 ID。
-     * @param requester_user_id 申请方用户 ID。
-     * @return true 表示记录成功。
-     */
-    bool addPendingRequest(int target_user_id, int requester_user_id);
-    /**
-     * @brief 消费挂起好友请求。
-     * @param target_user_id 目标用户 ID。
-     * @param requester_user_id 申请方用户 ID。
-     * @return true 表示存在并已消费。
-     */
-    bool consumePendingRequest(int target_user_id, int requester_user_id);
-
     /// @brief 用户仓储。
     UserRepository   users_;
     /// @brief 好友关系仓储。
     FriendRepository friends_;
+    /// @brief 聊天仓储（用于离线好友申请入队）。
+    ChatRepository   messages_;
     /// @brief 会话管理器引用。
     SessionManager&  sessions_;
-    /// @brief 挂起请求集合互斥锁。
-    std::mutex pending_mutex_;
-    /// @brief 挂起请求表：target_user_id -> requester_id 集合。
-    std::unordered_map<int, std::unordered_set<int>> pending_requests_;
 };
 
 } // namespace cloudvault

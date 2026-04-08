@@ -95,6 +95,34 @@ std::vector<uint8_t> buildChatPush(const std::string& from,
         .build();
 }
 
+std::vector<uint8_t> buildGroupChatPush(const std::string& from,
+                                        int group_id,
+                                        const std::string& content,
+                                        const std::string& created_at) {
+    return PDUBuilder(MessageType::GROUP_CHAT)
+        .writeUInt32(static_cast<uint32_t>(group_id))
+        .writeString(from)
+        .writeString(content)
+        .writeString(created_at)
+        .build();
+}
+
+bool decodeOfflineGroupPayload(const std::string& payload,
+                               int& group_id,
+                               std::string& content) {
+    const auto pos = payload.find('\n');
+    if (pos == std::string::npos) {
+        return false;
+    }
+    try {
+        group_id = std::stoi(payload.substr(0, pos));
+    } catch (...) {
+        return false;
+    }
+    content = payload.substr(pos + 1);
+    return group_id > 0;
+}
+
 } // namespace
 
 // =============================================================
@@ -227,6 +255,58 @@ void AuthHandler::handleLogout(std::shared_ptr<TcpConnection> conn,
     spdlog::info("LOGOUT success: {} (uid={})", current->username, current->user_id);
 }
 
+// =============================================================
+// handleUpdateProfile()
+// Body: nickname(string) + signature(string)
+// Response: status(uint8) + message(string)
+// =============================================================
+void AuthHandler::handleUpdateProfile(std::shared_ptr<TcpConnection> conn,
+                                       const PDUHeader& /*hdr*/,
+                                       const std::vector<uint8_t>& body)
+{
+    const auto session = sessions_.findByConnection(conn);
+    if (!session) {
+        auto pdu = PDUBuilder(MessageType::UPDATE_PROFILE_RESPONSE)
+            .writeUInt8(1)
+            .writeString("未登录")
+            .build();
+        conn->send(std::move(pdu));
+        return;
+    }
+
+    size_t   offset = 0;
+    uint16_t nick_len = 0, sig_len = 0;
+    std::string nickname, signature;
+
+    if (!readUInt16(body, offset, nick_len) ||
+        !readString(body, offset, nick_len, nickname) ||
+        !readUInt16(body, offset, sig_len) ||
+        !readString(body, offset, sig_len, signature)) {
+        auto pdu = PDUBuilder(MessageType::UPDATE_PROFILE_RESPONSE)
+            .writeUInt8(2)
+            .writeString("请求格式错误")
+            .build();
+        conn->send(std::move(pdu));
+        return;
+    }
+
+    bool ok = users_.updateProfile(session->user_id, nickname, signature);
+
+    uint8_t status = ok ? 0 : 3;
+    std::string msg = ok ? "更新成功" : "更新失败";
+
+    auto pdu = PDUBuilder(MessageType::UPDATE_PROFILE_RESPONSE)
+        .writeUInt8(status)
+        .writeString(msg)
+        .build();
+    conn->send(std::move(pdu));
+
+    if (ok) {
+        spdlog::info("Profile updated: {} nick='{}' sig='{}'",
+                     session->username, nickname, signature);
+    }
+}
+
 void AuthHandler::deliverOfflineMessages(std::shared_ptr<TcpConnection> conn,
                                          int user_id,
                                          const std::string& username) {
@@ -236,10 +316,22 @@ void AuthHandler::deliverOfflineMessages(std::shared_ptr<TcpConnection> conn,
     }
 
     for (const auto& item : offline_messages) {
-        conn->send(buildChatPush(item.sender_username,
-                                 username,
-                                 item.content,
-                                 item.created_at));
+        if (item.msg_type == static_cast<uint32_t>(MessageType::CHAT)) {
+            conn->send(buildChatPush(item.sender_username,
+                                     username,
+                                     item.content,
+                                     item.created_at));
+        } else if (item.msg_type == static_cast<uint32_t>(MessageType::GROUP_CHAT)) {
+            int group_id = 0;
+            std::string content;
+            if (!decodeOfflineGroupPayload(item.content, group_id, content)) {
+                continue;
+            }
+            conn->send(buildGroupChatPush(item.sender_username,
+                                          group_id,
+                                          content,
+                                          item.created_at));
+        }
     }
 
     if (!messages_.markMessagesDelivered(user_id)) {

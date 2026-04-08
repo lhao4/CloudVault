@@ -73,7 +73,8 @@ std::optional<UserInfo> UserRepository::findByName(const std::string& username) 
     if (!stmt) return std::nullopt;
 
     const char* sql =
-        "SELECT user_id, username, password_hash, is_online "
+        "SELECT user_id, username, password_hash, "
+        "COALESCE(nickname,''), COALESCE(signature,''), COALESCE(avatar_path,''), is_online "
         "FROM user_info WHERE username = ? LIMIT 1";
     if (mysql_stmt_prepare(stmt, sql, static_cast<unsigned long>(strlen(sql))) != 0) {
         mysql_stmt_close(stmt);
@@ -97,12 +98,16 @@ std::optional<UserInfo> UserRepository::findByName(const std::string& username) 
     int    user_id      = 0;
     char   uname_buf[64]{};
     char   hash_buf[256]{};
+    char   nick_buf[128]{};
+    char   sig_buf[256]{};
+    char   avatar_buf[512]{};
     char   is_online_val = 0;
 
     unsigned long uname_len = 0, hash_len = 0;
+    unsigned long nick_len = 0, sig_len = 0, avatar_len = 0;
     bool          is_online_null = false;
 
-    MYSQL_BIND results[4]{};
+    MYSQL_BIND results[7]{};
     results[0].buffer_type   = MYSQL_TYPE_LONG;
     results[0].buffer        = &user_id;
 
@@ -116,9 +121,24 @@ std::optional<UserInfo> UserRepository::findByName(const std::string& username) 
     results[2].buffer_length = sizeof(hash_buf);
     results[2].length        = &hash_len;
 
-    results[3].buffer_type   = MYSQL_TYPE_TINY;
-    results[3].buffer        = &is_online_val;
-    results[3].is_null       = &is_online_null;
+    results[3].buffer_type   = MYSQL_TYPE_STRING;
+    results[3].buffer        = nick_buf;
+    results[3].buffer_length = sizeof(nick_buf);
+    results[3].length        = &nick_len;
+
+    results[4].buffer_type   = MYSQL_TYPE_STRING;
+    results[4].buffer        = sig_buf;
+    results[4].buffer_length = sizeof(sig_buf);
+    results[4].length        = &sig_len;
+
+    results[5].buffer_type   = MYSQL_TYPE_STRING;
+    results[5].buffer        = avatar_buf;
+    results[5].buffer_length = sizeof(avatar_buf);
+    results[5].length        = &avatar_len;
+
+    results[6].buffer_type   = MYSQL_TYPE_TINY;
+    results[6].buffer        = &is_online_val;
+    results[6].is_null       = &is_online_null;
 
     mysql_stmt_bind_result(stmt, results);
 
@@ -128,6 +148,9 @@ std::optional<UserInfo> UserRepository::findByName(const std::string& username) 
         info.user_id       = user_id;
         info.username      = std::string(uname_buf, uname_len);
         info.password_hash = std::string(hash_buf, hash_len);
+        info.nickname      = std::string(nick_buf, nick_len);
+        info.signature     = std::string(sig_buf, sig_len);
+        info.avatar_path   = std::string(avatar_buf, avatar_len);
         info.is_online     = (is_online_val != 0);
         result = std::move(info);
     }
@@ -162,6 +185,47 @@ bool UserRepository::setOnline(int user_id, bool online) {
 
     mysql_stmt_bind_param(stmt, params);
     bool ok = (mysql_stmt_execute(stmt) == 0);
+    mysql_stmt_close(stmt);
+    return ok;
+}
+
+// =============================================================
+// updateProfile()：更新昵称和签名
+// =============================================================
+bool UserRepository::updateProfile(int user_id,
+                                   const std::string& nickname,
+                                   const std::string& signature) {
+    auto conn = db_.acquire();
+
+    MYSQL_STMT* stmt = mysql_stmt_init(conn.get());
+    if (!stmt) return false;
+
+    const char* sql =
+        "UPDATE user_info SET nickname = ?, signature = ? WHERE user_id = ?";
+    if (mysql_stmt_prepare(stmt, sql, static_cast<unsigned long>(strlen(sql))) != 0) {
+        spdlog::error("updateProfile prepare failed: {}", mysql_stmt_error(stmt));
+        mysql_stmt_close(stmt);
+        return false;
+    }
+
+    MYSQL_BIND params[3]{};
+
+    params[0].buffer_type   = MYSQL_TYPE_STRING;
+    params[0].buffer        = const_cast<char*>(nickname.c_str());
+    params[0].buffer_length = static_cast<unsigned long>(nickname.size());
+
+    params[1].buffer_type   = MYSQL_TYPE_STRING;
+    params[1].buffer        = const_cast<char*>(signature.c_str());
+    params[1].buffer_length = static_cast<unsigned long>(signature.size());
+
+    params[2].buffer_type   = MYSQL_TYPE_LONG;
+    params[2].buffer        = &user_id;
+
+    mysql_stmt_bind_param(stmt, params);
+    bool ok = (mysql_stmt_execute(stmt) == 0);
+    if (!ok) {
+        spdlog::error("updateProfile execute failed: {}", mysql_stmt_error(stmt));
+    }
     mysql_stmt_close(stmt);
     return ok;
 }

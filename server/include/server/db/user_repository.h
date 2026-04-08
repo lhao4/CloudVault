@@ -22,6 +22,12 @@ struct UserInfo {
     std::string username;
     /// @brief 密码哈希值。
     std::string password_hash;
+    /// @brief 昵称（可为空，显示时回退到 username）。
+    std::string nickname;
+    /// @brief 个性签名。
+    std::string signature;
+    /// @brief 头像路径（相对于用户根目录）。
+    std::string avatar_path;
     /// @brief 在线状态。
     bool        is_online     = false;
 };
@@ -62,6 +68,17 @@ public:
      * @return true 表示更新成功。
      */
     bool setOnline(int user_id, bool online);
+
+    /**
+     * @brief 更新个人资料（昵称和签名）。
+     * @param user_id 用户 ID。
+     * @param nickname 新昵称。
+     * @param signature 新签名。
+     * @return true 表示更新成功。
+     */
+    bool updateProfile(int user_id,
+                       const std::string& nickname,
+                       const std::string& signature);
 
 private:
     /// @brief 数据库连接池引用。

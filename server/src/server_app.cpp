@@ -161,6 +161,7 @@ bool ServerApp::init(const std::string& config_path) {
     auth_handler_ = std::make_unique<cloudvault::AuthHandler>(*db_, sessions_);
     chat_handler_ = std::make_unique<cloudvault::ChatHandler>(*db_, sessions_);
     friend_handler_ = std::make_unique<cloudvault::FriendHandler>(*db_, sessions_);
+    group_handler_ = std::make_unique<cloudvault::GroupHandler>(*db_, sessions_);
     file_handler_ = std::make_unique<cloudvault::FileHandler>(sessions_, *file_storage_);
     share_handler_ = std::make_unique<cloudvault::ShareHandler>(*db_, sessions_, *file_storage_);
 
@@ -247,6 +248,14 @@ void ServerApp::registerHandlers() {
         });
 
     dispatcher_.registerHandler(
+        cloudvault::MessageType::UPDATE_PROFILE_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            auth_handler_->handleUpdateProfile(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
         cloudvault::MessageType::LOGOUT,
         [this](std::shared_ptr<cloudvault::TcpConnection> conn,
                const cloudvault::PDUHeader& hdr,
@@ -269,6 +278,14 @@ void ServerApp::registerHandlers() {
                const cloudvault::PDUHeader& hdr,
                const std::vector<uint8_t>& body) {
             chat_handler_->handleGetHistory(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::GROUP_CHAT,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            group_handler_->handleGroupChat(conn, hdr, body);
         });
 
     // 好友（第九章）
@@ -313,6 +330,38 @@ void ServerApp::registerHandlers() {
         });
 
     // 文件管理（第十一章）
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::CREATE_GROUP_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            group_handler_->handleCreateGroup(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::JOIN_GROUP_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            group_handler_->handleJoinGroup(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::LEAVE_GROUP_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            group_handler_->handleLeaveGroup(conn, hdr, body);
+        });
+
+    dispatcher_.registerHandler(
+        cloudvault::MessageType::GET_GROUP_LIST_REQUEST,
+        [this](std::shared_ptr<cloudvault::TcpConnection> conn,
+               const cloudvault::PDUHeader& hdr,
+               const std::vector<uint8_t>& body) {
+            group_handler_->handleGetGroupList(conn, hdr, body);
+        });
+
     dispatcher_.registerHandler(
         cloudvault::MessageType::FLUSH_FILE,
         [this](std::shared_ptr<cloudvault::TcpConnection> conn,
@@ -456,6 +505,7 @@ void ServerApp::shutdown() {
     auth_handler_.reset();
     chat_handler_.reset();
     friend_handler_.reset();
+    group_handler_.reset();
     share_handler_.reset();
     file_handler_.reset();
     file_storage_.reset();
