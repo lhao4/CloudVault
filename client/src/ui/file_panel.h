@@ -7,6 +7,7 @@
 
 #include "service/file_service.h"
 
+#include <QPair>
 #include <QWidget>
 
 class QLabel;
@@ -15,6 +16,7 @@ class QListWidget;
 class QProgressBar;
 class QPushButton;
 class QFrame;
+class QHBoxLayout;
 
 /**
  * @brief 文件中栏面板。
@@ -75,6 +77,19 @@ public:
      */
     void setPathState(const QString& text, const QString& tooltip, bool can_go_back);
     /**
+     * @brief 设置路径面包屑。
+     * @param crumbs 路径段列表（标题, 对应路径）。
+     * @param active_path 当前高亮路径。
+     */
+    void setBreadcrumbs(const QList<QPair<QString, QString>>& crumbs,
+                        const QString& active_path);
+    /**
+     * @brief 设置当前文件上下文摘要。
+     * @param title 上下文标题。
+     * @param meta 上下文附加信息。
+     */
+    void setContextSummary(const QString& title, const QString& meta);
+    /**
      * @brief 切换文件列表空态。
      * @param text 空态文案。
      * @param empty 是否为空。
@@ -88,6 +103,10 @@ public:
      * @brief 根据选择状态刷新行高亮。
      */
     void refreshSelectionHighlights();
+    /**
+     * @brief 清空当前选中项。
+     */
+    void clearCurrentSelection();
     /**
      * @brief 获取搜索框文本。
      * @return 搜索关键词。
@@ -147,6 +166,8 @@ public:
 signals:
     /// @brief 返回上级目录。
     void backRequested();
+    /// @brief 面包屑路径点击。
+    void breadcrumbRequested(const QString& path);
     /// @brief 上传文件请求。
     void uploadRequested();
     /// @brief 刷新文件列表请求。
@@ -177,6 +198,12 @@ signals:
 private:
     /// @brief 当前路径显示标签。
     QLabel* path_label_ = nullptr;
+    /// @brief 路径面包屑容器。
+    QWidget* breadcrumb_row_ = nullptr;
+    /// @brief 路径面包屑布局。
+    QHBoxLayout* breadcrumb_layout_ = nullptr;
+    /// @brief 上下文摘要标签。
+    QLabel* path_meta_label_ = nullptr;
     /// @brief 状态标签（底部元信息）。
     QLabel* status_label_ = nullptr;
     /// @brief 搜索输入框。

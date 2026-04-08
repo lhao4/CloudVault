@@ -5,9 +5,10 @@
 
 #pragma once
 
+#include "service/friend_service.h"
+
 #include <QDialog>
 #include <QList>
-#include <QPair>
 #include <QString>
 
 class QListWidget;
@@ -20,7 +21,7 @@ class ShareFileDialog : public QDialog {
 
 public:
     explicit ShareFileDialog(const QString& file_name,
-                             const QList<QPair<QString, bool>>& friends,
+                             const QList<cloudvault::FriendProfile>& friends,
                              QWidget* parent = nullptr);
 
 signals:
@@ -34,7 +35,7 @@ private:
     QStringList selectedTargets() const;
 
     QString file_name_;
-    QList<QPair<QString, bool>> friends_;
+    QList<cloudvault::FriendProfile> friends_;
     QLabel* file_hint_label_ = nullptr;
     QLabel* selection_hint_label_ = nullptr;
     QLineEdit* search_edit_ = nullptr;

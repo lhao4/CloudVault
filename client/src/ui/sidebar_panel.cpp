@@ -4,6 +4,7 @@
 // =============================================================
 
 #include "sidebar_panel.h"
+#include "ui/widget_helpers.h"
 
 #include <QAbstractItemView>
 #include <QFrame>
@@ -17,20 +18,9 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+using namespace cv_ui;
+
 namespace {
-
-int avatarVariantForSeed(const QString& seed) {
-    return static_cast<int>(qHash(seed)) % 6;
-}
-
-void repolish(QWidget* widget) {
-    if (!widget) {
-        return;
-    }
-    widget->style()->unpolish(widget);
-    widget->style()->polish(widget);
-    widget->update();
-}
 
 void allowViewToHandleMouseEvents(QWidget* widget) {
     if (!widget) {
@@ -43,56 +33,30 @@ void allowViewToHandleMouseEvents(QWidget* widget) {
     }
 }
 
-void prepareAvatarBadge(QLabel* label, const QString& seed, int size) {
-    if (!label) {
-        return;
-    }
-    label->setObjectName(QStringLiteral("avatarBadge"));
-    label->setProperty("variant", avatarVariantForSeed(seed));
-    label->setAlignment(Qt::AlignCenter);
-    label->setFixedSize(size, size);
-    label->setText(seed.left(1).toUpper());
-    label->setStyleSheet(QStringLiteral("border-radius:%1px;").arg(size / 2));
-    repolish(label);
-}
-
-QWidget* createAvatarWidget(const QString& seed,
-                            int size,
-                            bool online,
-                            QWidget* parent = nullptr) {
-    auto* wrap = new QWidget(parent);
-    wrap->setFixedSize(size, size);
-
-    auto* avatar = new QLabel(wrap);
-    prepareAvatarBadge(avatar, seed, size);
-    avatar->move(0, 0);
-
-    if (size >= 34) {
-        auto* dot = new QLabel(wrap);
-        dot->setObjectName(QStringLiteral("onlineDot"));
-        dot->setFixedSize(10, 10);
-        dot->move(size - 12, size - 12);
-        dot->setVisible(online);
-    }
-
-    return wrap;
-}
-
-QPushButton* createIconButton(const QString& text,
-                              const QString& tooltip,
-                              int size,
-                              QWidget* parent = nullptr) {
-    auto* button = new QPushButton(text, parent);
-    button->setObjectName(QStringLiteral("iconBtn"));
-    button->setCursor(Qt::PointingHandCursor);
-    button->setFixedSize(size, size);
-    button->setToolTip(tooltip);
-    return button;
-}
-
-QWidget* createContactItemWidget(const SidebarContactEntry& entry,
+QWidget* createContactItemWidget(const SidebarEntry& entry,
                                  bool selected,
                                  QWidget* parent = nullptr) {
+    if (entry.type == SidebarItemType::Section) {
+        auto* section = new QFrame(parent);
+        section->setObjectName(QStringLiteral("sidebarSectionRow"));
+        auto* layout = new QHBoxLayout(section);
+        layout->setContentsMargins(12, 12, 12, 6);
+        layout->setSpacing(8);
+
+        auto* label = new QLabel(entry.title, section);
+        label->setObjectName(QStringLiteral("sidebarSectionLabel"));
+        layout->addWidget(label);
+        layout->addStretch();
+
+        if (!entry.tag.isEmpty()) {
+            auto* tag = new QLabel(entry.tag, section);
+            tag->setObjectName(QStringLiteral("sidebarSectionTag"));
+            layout->addWidget(tag);
+        }
+        allowViewToHandleMouseEvents(section);
+        return section;
+    }
+
     auto* frame = new QFrame(parent);
     frame->setObjectName(QStringLiteral("contactCard"));
     frame->setProperty("selected", selected);
@@ -112,7 +76,10 @@ QWidget* createContactItemWidget(const SidebarContactEntry& entry,
     body_layout->setContentsMargins(10, 0, 12, 0);
     body_layout->setSpacing(10);
 
-    body_layout->addWidget(createAvatarWidget(entry.username, 40, entry.online, body),
+    const QString avatar_seed = (entry.type == SidebarItemType::Group)
+        ? QStringLiteral("群")
+        : (entry.type == SidebarItemType::Action ? QStringLiteral("＋") : entry.title);
+    body_layout->addWidget(createAvatarWidget(avatar_seed, 40, entry.online, body),
                            0,
                            Qt::AlignVCenter);
 
@@ -120,7 +87,7 @@ QWidget* createContactItemWidget(const SidebarContactEntry& entry,
     text_layout->setContentsMargins(0, 10, 0, 10);
     text_layout->setSpacing(2);
 
-    auto* name_label = new QLabel(entry.username, body);
+    auto* name_label = new QLabel(entry.title, body);
     name_label->setObjectName(QStringLiteral("contactNameLabel"));
     text_layout->addWidget(name_label);
 
@@ -139,7 +106,12 @@ QWidget* createContactItemWidget(const SidebarContactEntry& entry,
     time_label->setAlignment(Qt::AlignRight);
     meta_layout->addWidget(time_label);
 
-    if (entry.unread > 0) {
+    if (!entry.tag.isEmpty()) {
+        auto* badge = new QLabel(entry.tag, body);
+        badge->setObjectName(QStringLiteral("contactTagLabel"));
+        badge->setAlignment(Qt::AlignCenter);
+        meta_layout->addWidget(badge, 0, Qt::AlignRight);
+    } else if (entry.unread > 0) {
         auto* badge = new QLabel(QString::number(entry.unread), body);
         badge->setObjectName(QStringLiteral("contactBadgeLabel"));
         badge->setAlignment(Qt::AlignCenter);
@@ -159,8 +131,8 @@ QWidget* createContactItemWidget(const SidebarContactEntry& entry,
 SidebarPanel::SidebarPanel(QWidget* parent)
     : QFrame(parent) {
     setObjectName(QStringLiteral("sidebarPanel"));
-    setMinimumWidth(240);
-    setMaximumWidth(240);
+    setMinimumWidth(260);
+    setMaximumWidth(260);
 
     auto* sidebar_layout = new QVBoxLayout(this);
     sidebar_layout->setContentsMargins(0, 0, 0, 0);
@@ -168,9 +140,9 @@ SidebarPanel::SidebarPanel(QWidget* parent)
 
     auto* sidebar_header = new QFrame(this);
     sidebar_header->setObjectName(QStringLiteral("sidebarHeader"));
-    sidebar_header->setFixedHeight(56);
+    sidebar_header->setFixedHeight(64);
     auto* sidebar_header_layout = new QHBoxLayout(sidebar_header);
-    sidebar_header_layout->setContentsMargins(14, 0, 12, 0);
+    sidebar_header_layout->setContentsMargins(18, 0, 14, 0);
     sidebar_header_layout->setSpacing(8);
 
     title_label_ = new QLabel(QStringLiteral("消息"), sidebar_header);
@@ -179,7 +151,7 @@ SidebarPanel::SidebarPanel(QWidget* parent)
     sidebar_header_layout->addStretch();
 
     action_btn_ = createIconButton(QStringLiteral("+"),
-                                   QStringLiteral("查看在线用户"),
+                                   QStringLiteral("快捷操作"),
                                    30,
                                    sidebar_header);
     sidebar_header_layout->addWidget(action_btn_);
@@ -187,9 +159,9 @@ SidebarPanel::SidebarPanel(QWidget* parent)
 
     auto* sidebar_search_row = new QFrame(this);
     sidebar_search_row->setObjectName(QStringLiteral("sidebarSearchRow"));
-    sidebar_search_row->setFixedHeight(48);
+    sidebar_search_row->setFixedHeight(54);
     auto* sidebar_search_layout = new QHBoxLayout(sidebar_search_row);
-    sidebar_search_layout->setContentsMargins(12, 8, 12, 8);
+    sidebar_search_layout->setContentsMargins(16, 10, 16, 10);
     sidebar_search_layout->setSpacing(0);
 
     search_edit_ = new QLineEdit(sidebar_search_row);
@@ -208,8 +180,14 @@ SidebarPanel::SidebarPanel(QWidget* parent)
             this, &SidebarPanel::searchTextChanged);
     connect(contact_list_, &QListWidget::itemSelectionChanged,
             this, &SidebarPanel::contactSelectionChanged);
+    connect(contact_list_, &QListWidget::itemClicked,
+            this, [this](QListWidgetItem*) { emit contactSelectionChanged(); });
     connect(action_btn_, &QPushButton::clicked,
             this, &SidebarPanel::actionRequested);
+}
+
+void SidebarPanel::setMode(SidebarMode mode) {
+    mode_ = mode;
 }
 
 void SidebarPanel::setHeader(const QString& title,
@@ -226,9 +204,9 @@ void SidebarPanel::setHeader(const QString& title,
     }
 }
 
-void SidebarPanel::populateContacts(const QList<SidebarContactEntry>& contacts,
-                                    const QString& selected_username,
-                                    bool auto_select_first) {
+void SidebarPanel::populateEntries(const QList<SidebarEntry>& entries,
+                                   const QString& selected_key,
+                                   bool auto_select_first) {
     if (!contact_list_) {
         return;
     }
@@ -236,23 +214,36 @@ void SidebarPanel::populateContacts(const QList<SidebarContactEntry>& contacts,
     const QSignalBlocker blocker(contact_list_);
     contact_list_->clear();
 
-    for (const auto& entry : contacts) {
+    for (const auto& entry : entries) {
         auto* item = new QListWidgetItem(contact_list_);
-        item->setSizeHint(QSize(0, 64));
-        item->setData(Qt::UserRole, entry.username);
+        item->setSizeHint(QSize(0, entry.type == SidebarItemType::Section ? 34 : 64));
+        item->setData(Qt::UserRole, entry.key);
         item->setData(Qt::UserRole + 1, entry.online);
+        item->setData(Qt::UserRole + 2, entry.title);
+        item->setData(Qt::UserRole + 3, entry.id);
+        item->setData(Qt::UserRole + 4, static_cast<int>(entry.type));
 
-        const bool is_selected = entry.username == selected_username;
+        const bool is_selected = entry.key == selected_key;
         contact_list_->setItemWidget(item,
                                      createContactItemWidget(entry, is_selected, contact_list_));
+        if (entry.type == SidebarItemType::Section) {
+            item->setFlags(Qt::NoItemFlags);
+            continue;
+        }
         if (is_selected) {
             contact_list_->setCurrentItem(item);
             item->setSelected(true);
         }
     }
 
-    if (auto_select_first && contact_list_->count() > 0 && selected_username.isEmpty()) {
-        contact_list_->setCurrentRow(0);
+    if (auto_select_first && selected_key.isEmpty()) {
+        for (int i = 0; i < contact_list_->count(); ++i) {
+            auto* item = contact_list_->item(i);
+            if (item && item->flags() != Qt::NoItemFlags) {
+                contact_list_->setCurrentItem(item);
+                break;
+            }
+        }
     }
 }
 
@@ -264,6 +255,9 @@ void SidebarPanel::refreshSelectionHighlights() {
         auto* item = contact_list_->item(i);
         auto* widget = contact_list_->itemWidget(item);
         if (!widget) {
+            continue;
+        }
+        if (item->flags() == Qt::NoItemFlags) {
             continue;
         }
         const bool selected = item->isSelected();
@@ -293,17 +287,44 @@ void SidebarPanel::focusSearchSelectAll() {
     }
 }
 
-int SidebarPanel::contactCount() const {
+int SidebarPanel::itemCount() const {
     return contact_list_ ? contact_list_->count() : 0;
 }
 
-QString SidebarPanel::currentUsername() const {
+QString SidebarPanel::currentKey() const {
     if (contact_list_) {
         if (auto* item = contact_list_->currentItem()) {
             return item->data(Qt::UserRole).toString();
         }
     }
     return {};
+}
+
+QString SidebarPanel::currentTitle() const {
+    if (contact_list_) {
+        if (auto* item = contact_list_->currentItem()) {
+            return item->data(Qt::UserRole + 2).toString();
+        }
+    }
+    return {};
+}
+
+SidebarItemType SidebarPanel::currentItemType() const {
+    if (contact_list_) {
+        if (auto* item = contact_list_->currentItem()) {
+            return static_cast<SidebarItemType>(item->data(Qt::UserRole + 4).toInt());
+        }
+    }
+    return SidebarItemType::Friend;
+}
+
+int SidebarPanel::currentItemId() const {
+    if (contact_list_) {
+        if (auto* item = contact_list_->currentItem()) {
+            return item->data(Qt::UserRole + 3).toInt();
+        }
+    }
+    return 0;
 }
 
 bool SidebarPanel::currentOnline() const {
@@ -313,4 +334,8 @@ bool SidebarPanel::currentOnline() const {
         }
     }
     return false;
+}
+
+SidebarMode SidebarPanel::mode() const {
+    return mode_;
 }

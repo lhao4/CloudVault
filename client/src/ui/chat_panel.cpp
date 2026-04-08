@@ -4,6 +4,7 @@
 // =============================================================
 
 #include "chat_panel.h"
+#include "ui/widget_helpers.h"
 
 #include <QAbstractItemView>
 #include <QDate>
@@ -23,6 +24,8 @@
 #include <QStyleOptionViewItem>
 #include <QTextEdit>
 #include <QVBoxLayout>
+
+using namespace cv_ui;
 
 namespace {
 
@@ -80,66 +83,6 @@ QString formatDividerDate(const QString& key) {
         return key;
     }
     return date.toString(QStringLiteral("yyyy-MM-dd"));
-}
-
-int avatarVariantForSeed(const QString& seed) {
-    return static_cast<int>(qHash(seed)) % 6;
-}
-
-void repolish(QWidget* widget) {
-    if (!widget) {
-        return;
-    }
-    widget->style()->unpolish(widget);
-    widget->style()->polish(widget);
-    widget->update();
-}
-
-void prepareAvatarBadge(QLabel* label, const QString& seed, int size) {
-    if (!label) {
-        return;
-    }
-    label->setObjectName(QStringLiteral("avatarBadge"));
-    label->setProperty("variant", avatarVariantForSeed(seed));
-    label->setAlignment(Qt::AlignCenter);
-    label->setFixedSize(size, size);
-    label->setText(seed.left(1).toUpper());
-    label->setStyleSheet(QStringLiteral("border-radius:%1px;").arg(size / 2));
-    repolish(label);
-}
-
-QWidget* createAvatarWidget(const QString& seed,
-                            int size,
-                            bool online,
-                            QWidget* parent = nullptr) {
-    auto* wrap = new QWidget(parent);
-    wrap->setFixedSize(size, size);
-
-    auto* avatar = new QLabel(wrap);
-    prepareAvatarBadge(avatar, seed, size);
-    avatar->move(0, 0);
-
-    if (size >= 34) {
-        auto* dot = new QLabel(wrap);
-        dot->setObjectName(QStringLiteral("onlineDot"));
-        dot->setFixedSize(10, 10);
-        dot->move(size - 12, size - 12);
-        dot->setVisible(online);
-    }
-
-    return wrap;
-}
-
-QPushButton* createIconButton(const QString& text,
-                              const QString& tooltip,
-                              int size,
-                              QWidget* parent = nullptr) {
-    auto* button = new QPushButton(text, parent);
-    button->setObjectName(QStringLiteral("iconBtn"));
-    button->setCursor(Qt::PointingHandCursor);
-    button->setFixedSize(size, size);
-    button->setToolTip(tooltip);
-    return button;
 }
 
 QPainterPath bubblePath(const QRectF& rect, bool outgoing) {
@@ -392,7 +335,7 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
     empty_title->setAlignment(Qt::AlignCenter);
     empty_layout->addWidget(empty_title);
 
-    auto* empty_hint = new QLabel(QStringLiteral("从左侧联系人列表中选择一个会话。"), empty_page);
+    auto* empty_hint = new QLabel(QStringLiteral("从左侧会话或联系人视图中选择一个对象。"), empty_page);
     empty_hint->setObjectName(QStringLiteral("chatEmptyHint"));
     empty_hint->setAlignment(Qt::AlignCenter);
     empty_layout->addWidget(empty_hint);
@@ -406,9 +349,9 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
 
     auto* chat_top_bar = new QFrame(conversation_page);
     chat_top_bar->setObjectName(QStringLiteral("chatTopBar"));
-    chat_top_bar->setFixedHeight(56);
+    chat_top_bar->setFixedHeight(64);
     auto* chat_top_layout = new QHBoxLayout(chat_top_bar);
-    chat_top_layout->setContentsMargins(16, 0, 16, 0);
+    chat_top_layout->setContentsMargins(20, 0, 20, 0);
     chat_top_layout->setSpacing(10);
 
     chat_top_layout->addWidget(createAvatarWidget(current_username, 34, false, chat_top_bar));
@@ -428,11 +371,11 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
     chat_text_layout->addWidget(status_label_);
     chat_top_layout->addLayout(chat_text_layout, 1);
 
-    group_list_button_ = createIconButton(QStringLiteral("📋"),
-                                          QStringLiteral("群组列表"),
-                                          30,
-                                          chat_top_bar);
-    chat_top_layout->addWidget(group_list_button_);
+    auto* groups_btn = createIconButton(QStringLiteral("📋"),
+                                       QStringLiteral("群组列表"),
+                                       30,
+                                       chat_top_bar);
+    chat_top_layout->addWidget(groups_btn);
     chat_top_layout->addWidget(createIconButton(QStringLiteral("📎"),
                                                 QStringLiteral("附件"),
                                                 30,
@@ -459,9 +402,9 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
 
     auto* input_toolbar = new QFrame(compose_bar);
     input_toolbar->setObjectName(QStringLiteral("inputToolbar"));
-    input_toolbar->setFixedHeight(36);
+    input_toolbar->setFixedHeight(40);
     auto* input_toolbar_layout = new QHBoxLayout(input_toolbar);
-    input_toolbar_layout->setContentsMargins(16, 0, 16, 0);
+    input_toolbar_layout->setContentsMargins(20, 0, 20, 0);
     input_toolbar_layout->setSpacing(8);
     input_toolbar_layout->addWidget(createIconButton(QStringLiteral("😊"),
                                                      QStringLiteral("表情"),
@@ -471,6 +414,12 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
                                                      QStringLiteral("发送文件"),
                                                      24,
                                                      input_toolbar));
+    members_btn_ = createIconButton(QStringLiteral("👥"),
+                                    QStringLiteral("群成员"),
+                                    24,
+                                    input_toolbar);
+    members_btn_->setVisible(false);
+    input_toolbar_layout->addWidget(members_btn_);
     input_toolbar_layout->addStretch();
     compose_layout->addWidget(input_toolbar);
 
@@ -483,9 +432,9 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
 
     auto* input_send_bar = new QFrame(compose_bar);
     input_send_bar->setObjectName(QStringLiteral("inputSendBar"));
-    input_send_bar->setFixedHeight(44);
+    input_send_bar->setFixedHeight(48);
     auto* input_send_layout = new QHBoxLayout(input_send_bar);
-    input_send_layout->setContentsMargins(16, 0, 16, 0);
+    input_send_layout->setContentsMargins(20, 0, 20, 0);
     input_send_layout->setSpacing(8);
     input_send_layout->addStretch();
 
@@ -502,63 +451,12 @@ ChatPanel::ChatPanel(const QString& current_username, QWidget* parent)
             this, &ChatPanel::sendRequested);
     connect(send_button_, &QPushButton::clicked,
             this, &ChatPanel::sendRequested);
-    connect(group_list_button_, &QPushButton::clicked,
+    connect(groups_btn, &QPushButton::clicked,
+            this, &ChatPanel::groupListRequested);
+    connect(members_btn_, &QPushButton::clicked,
             this, &ChatPanel::groupListRequested);
 
     stack_->addWidget(conversation_page);
-
-    auto* group_page = new QWidget(stack_);
-    auto* group_layout = new QVBoxLayout(group_page);
-    group_layout->setContentsMargins(0, 0, 0, 0);
-    group_layout->setSpacing(0);
-
-    auto* group_top_bar = new QFrame(group_page);
-    group_top_bar->setObjectName(QStringLiteral("chatTopBar"));
-    group_top_bar->setFixedHeight(56);
-    auto* group_top_layout = new QHBoxLayout(group_top_bar);
-    group_top_layout->setContentsMargins(16, 0, 16, 0);
-    group_top_layout->setSpacing(10);
-
-    group_top_layout->addWidget(createAvatarWidget(QStringLiteral("群"), 34, false, group_top_bar));
-
-    auto* group_text_layout = new QVBoxLayout();
-    group_text_layout->setContentsMargins(0, 7, 0, 7);
-    group_text_layout->setSpacing(1);
-
-    group_title_label_ = new QLabel(QStringLiteral("群聊"), group_top_bar);
-    group_title_label_->setObjectName(QStringLiteral("chatTitle"));
-    group_text_layout->addWidget(group_title_label_);
-
-    group_status_label_ = new QLabel(QStringLiteral("当前版本尚未接入群聊后端"), group_top_bar);
-    group_status_label_->setObjectName(QStringLiteral("chatStatus"));
-    group_text_layout->addWidget(group_status_label_);
-    group_top_layout->addLayout(group_text_layout, 1);
-    group_layout->addWidget(group_top_bar);
-
-    auto* group_empty = new QWidget(group_page);
-    auto* group_empty_layout = new QVBoxLayout(group_empty);
-    group_empty_layout->setContentsMargins(0, 0, 0, 0);
-    group_empty_layout->setSpacing(8);
-    group_empty_layout->addStretch();
-
-    auto* group_icon = new QLabel(QStringLiteral("👥"), group_empty);
-    group_icon->setObjectName(QStringLiteral("chatEmptyIcon"));
-    group_icon->setAlignment(Qt::AlignCenter);
-    group_empty_layout->addWidget(group_icon, 0, Qt::AlignHCenter);
-
-    auto* group_title = new QLabel(QStringLiteral("群聊界面已就绪"), group_empty);
-    group_title->setObjectName(QStringLiteral("chatEmptyTitle"));
-    group_title->setAlignment(Qt::AlignCenter);
-    group_empty_layout->addWidget(group_title);
-
-    auto* group_hint = new QLabel(QStringLiteral("当前版本仅提供群组 UI 流程，消息后端待接入。"), group_empty);
-    group_hint->setObjectName(QStringLiteral("chatEmptyHint"));
-    group_hint->setAlignment(Qt::AlignCenter);
-    group_empty_layout->addWidget(group_hint);
-    group_empty_layout->addStretch();
-    group_layout->addWidget(group_empty, 1);
-
-    stack_->addWidget(group_page);
 }
 
 void ChatPanel::showEmptyState() {
@@ -576,31 +474,37 @@ void ChatPanel::showEmptyState() {
     }
 }
 
-void ChatPanel::showConversationHeader(const QString& username, const QString& presence) {
+void ChatPanel::showConversation(const QString& title,
+                                  const QString& subtitle,
+                                  bool is_group) {
+    is_group_ = is_group;
     if (stack_) {
         stack_->setCurrentIndex(1);
     }
     if (title_label_) {
-        title_label_->setText(username);
+        title_label_->setText(title);
     }
     if (status_label_) {
-        status_label_->setText(presence);
+        status_label_->setText(subtitle);
     }
-    prepareAvatarBadge(avatar_label_, username, 34);
+    const QString seed = is_group ? QStringLiteral("群") : title;
+    prepareAvatarBadge(avatar_label_, seed, 34);
+    if (members_btn_) {
+        members_btn_->setVisible(is_group);
+    }
+    if (message_input_) {
+        message_input_->setPlaceholderText(is_group ? QStringLiteral("输入群消息…")
+                                                    : QStringLiteral("输入消息…"));
+    }
+    // 切换会话时立即清空旧消息，避免上一个会话的气泡在新历史到达前短暂显示
+    if (message_list_) {
+        message_list_->clear();
+    }
 }
 
 void ChatPanel::setConversationStatus(const QString& status) {
     if (status_label_) {
         status_label_->setText(status);
-    }
-}
-
-void ChatPanel::showGroupPlaceholder(const QString& group_name) {
-    if (stack_) {
-        stack_->setCurrentIndex(2);
-    }
-    if (group_title_label_) {
-        group_title_label_->setText(group_name);
     }
 }
 
@@ -671,8 +575,6 @@ QStackedWidget* ChatPanel::stack() const { return stack_; }
 QLabel* ChatPanel::avatarLabel() const { return avatar_label_; }
 QLabel* ChatPanel::titleLabel() const { return title_label_; }
 QLabel* ChatPanel::statusLabel() const { return status_label_; }
-QLabel* ChatPanel::groupTitleLabel() const { return group_title_label_; }
-QLabel* ChatPanel::groupStatusLabel() const { return group_status_label_; }
 QListWidget* ChatPanel::messageList() const { return message_list_; }
 
 #include "chat_panel.moc"

@@ -4,11 +4,13 @@
 // =============================================================
 
 #include "file_panel.h"
+#include "ui/widget_helpers.h"
 
 #include <QAbstractItemView>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLayout>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QProgressBar>
@@ -18,16 +20,9 @@
 
 #include <algorithm>
 
-namespace {
+using namespace cv_ui;
 
-void repolish(QWidget* widget) {
-    if (!widget) {
-        return;
-    }
-    widget->style()->unpolish(widget);
-    widget->style()->polish(widget);
-    widget->update();
-}
+namespace {
 
 void allowViewToHandleMouseEvents(QWidget* widget) {
     if (!widget) {
@@ -38,22 +33,6 @@ void allowViewToHandleMouseEvents(QWidget* widget) {
     for (QWidget* child : children) {
         child->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     }
-}
-
-QString formatFileSize(quint64 size) {
-    static const char* units[] = {"B", "KB", "MB", "GB"};
-    double value = static_cast<double>(size);
-    int unit_index = 0;
-    while (value >= 1024.0 && unit_index < 3) {
-        value /= 1024.0;
-        ++unit_index;
-    }
-    if (unit_index == 0) {
-        return QStringLiteral("%1 %2").arg(static_cast<qulonglong>(size)).arg(units[unit_index]);
-    }
-    return QStringLiteral("%1 %2")
-        .arg(QString::number(value, 'f', value >= 10.0 ? 1 : 2))
-        .arg(units[unit_index]);
 }
 
 QLabel* createStandardIconLabel(QStyle::StandardPixmap icon_type,
@@ -88,9 +67,9 @@ QWidget* createFileItemWidget(const cloudvault::FileEntry& entry,
     layout->addWidget(accent);
 
     auto* body = new QWidget(frame);
-    body->setMinimumHeight(44);
+    body->setMinimumHeight(52);
     auto* row = new QHBoxLayout(body);
-    row->setContentsMargins(12, 0, 12, 0);
+    row->setContentsMargins(14, 0, 14, 0);
     row->setSpacing(12);
 
     auto* icon = createStandardIconLabel(entry.is_dir ? QStyle::SP_DirIcon
@@ -133,6 +112,18 @@ QWidget* createFileItemWidget(const cloudvault::FileEntry& entry,
     return frame;
 }
 
+void clearLayout(QLayout* layout) {
+    if (!layout) {
+        return;
+    }
+    while (auto* item = layout->takeAt(0)) {
+        if (auto* widget = item->widget()) {
+            widget->deleteLater();
+        }
+        delete item;
+    }
+}
+
 } // namespace
 
 FilePanel::FilePanel(QWidget* parent)
@@ -144,37 +135,54 @@ FilePanel::FilePanel(QWidget* parent)
 
     auto* top_bar = new QFrame(this);
     top_bar->setObjectName(QStringLiteral("fileTopBar"));
-    top_bar->setFixedHeight(56);
-    auto* top_layout = new QHBoxLayout(top_bar);
-    top_layout->setContentsMargins(20, 0, 20, 0);
-    top_layout->setSpacing(8);
+    auto* top_layout = new QVBoxLayout(top_bar);
+    top_layout->setContentsMargins(24, 12, 24, 12);
+    top_layout->setSpacing(10);
 
-    path_label_ = new QLabel(QStringLiteral("/"), top_bar);
+    auto* summary_row = new QWidget(top_bar);
+    auto* top_summary_layout = new QHBoxLayout(summary_row);
+    top_summary_layout->setContentsMargins(0, 0, 0, 0);
+    top_summary_layout->setSpacing(8);
+
+    path_label_ = new QLabel(QStringLiteral("/"), summary_row);
     path_label_->setObjectName(QStringLiteral("filePathLabel"));
     path_label_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    top_layout->addWidget(path_label_, 1);
+    top_summary_layout->addWidget(path_label_, 1);
 
-    back_btn_ = new QPushButton(QStringLiteral("返回"), top_bar);
+    path_meta_label_ = new QLabel(summary_row);
+    path_meta_label_->setObjectName(QStringLiteral("filePathMetaLabel"));
+    path_meta_label_->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    top_summary_layout->addWidget(path_meta_label_);
+
+    back_btn_ = new QPushButton(QStringLiteral("返回"), summary_row);
     back_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-    top_layout->addWidget(back_btn_);
+    top_summary_layout->addWidget(back_btn_);
 
-    upload_btn_ = new QPushButton(QStringLiteral("上传"), top_bar);
+    upload_btn_ = new QPushButton(QStringLiteral("上传"), summary_row);
     upload_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-    top_layout->addWidget(upload_btn_);
+    top_summary_layout->addWidget(upload_btn_);
 
-    refresh_btn_ = new QPushButton(QStringLiteral("刷新"), top_bar);
+    refresh_btn_ = new QPushButton(QStringLiteral("刷新"), summary_row);
     refresh_btn_->setObjectName(QStringLiteral("fileActionBtn"));
-    top_layout->addWidget(refresh_btn_);
+    top_summary_layout->addWidget(refresh_btn_);
 
-    create_btn_ = new QPushButton(QStringLiteral("+ 新建"), top_bar);
+    create_btn_ = new QPushButton(QStringLiteral("+ 新建"), summary_row);
     create_btn_->setObjectName(QStringLiteral("primaryFileBtn"));
-    top_layout->addWidget(create_btn_);
+    top_summary_layout->addWidget(create_btn_);
+    top_layout->addWidget(summary_row);
+
+    breadcrumb_row_ = new QWidget(top_bar);
+    breadcrumb_row_->setObjectName(QStringLiteral("fileBreadcrumbRow"));
+    breadcrumb_layout_ = new QHBoxLayout(breadcrumb_row_);
+    breadcrumb_layout_->setContentsMargins(0, 0, 0, 0);
+    breadcrumb_layout_->setSpacing(6);
+    top_layout->addWidget(breadcrumb_row_);
     page_layout->addWidget(top_bar);
 
     auto* search_row = new QFrame(this);
     search_row->setObjectName(QStringLiteral("fileSearchRow"));
     auto* search_layout = new QHBoxLayout(search_row);
-    search_layout->setContentsMargins(16, 10, 16, 10);
+    search_layout->setContentsMargins(20, 12, 20, 12);
     search_layout->setSpacing(0);
 
     search_edit_ = new QLineEdit(search_row);
@@ -185,9 +193,9 @@ FilePanel::FilePanel(QWidget* parent)
 
     auto* table_header = new QFrame(this);
     table_header->setObjectName(QStringLiteral("fileTableHeader"));
-    table_header->setFixedHeight(40);
+    table_header->setFixedHeight(44);
     auto* table_header_layout = new QHBoxLayout(table_header);
-    table_header_layout->setContentsMargins(14, 0, 14, 0);
+    table_header_layout->setContentsMargins(16, 0, 16, 0);
     table_header_layout->setSpacing(12);
 
     auto* name_header = new QLabel(QStringLiteral("名称"), table_header);
@@ -256,9 +264,9 @@ FilePanel::FilePanel(QWidget* parent)
 
     auto* footer = new QFrame(this);
     footer->setObjectName(QStringLiteral("fileActionBar"));
-    footer->setFixedHeight(56);
+    footer->setFixedHeight(64);
     auto* footer_layout = new QHBoxLayout(footer);
-    footer_layout->setContentsMargins(16, 0, 16, 0);
+    footer_layout->setContentsMargins(20, 0, 20, 0);
     footer_layout->setSpacing(8);
 
     auto* summary_layout = new QVBoxLayout();
@@ -378,7 +386,7 @@ void FilePanel::populateEntries(const cloudvault::FileEntries& entries) {
     file_list_->clear();
     for (const auto& entry : entries) {
         auto* item = new QListWidgetItem(file_list_);
-        item->setSizeHint(QSize(0, 44));
+        item->setSizeHint(QSize(0, 52));
         item->setData(Qt::UserRole, entry.path);
         item->setData(Qt::UserRole + 1, entry.is_dir);
         item->setData(Qt::UserRole + 2, entry.name);
@@ -393,6 +401,51 @@ void FilePanel::setPathState(const QString& text, const QString& tooltip, bool c
     }
     if (back_btn_) {
         back_btn_->setEnabled(can_go_back);
+    }
+}
+
+void FilePanel::setBreadcrumbs(const QList<QPair<QString, QString>>& crumbs,
+                               const QString& active_path) {
+    if (!breadcrumb_layout_ || !breadcrumb_row_) {
+        return;
+    }
+
+    clearLayout(breadcrumb_layout_);
+    const bool has_crumbs = !crumbs.isEmpty();
+    breadcrumb_row_->setVisible(has_crumbs);
+    if (!has_crumbs) {
+        return;
+    }
+
+    for (int i = 0; i < crumbs.size(); ++i) {
+        const auto& crumb = crumbs.at(i);
+        auto* button = new QPushButton(crumb.first, breadcrumb_row_);
+        button->setObjectName(QStringLiteral("fileBreadcrumbBtn"));
+        button->setProperty("active", crumb.second == active_path);
+        button->setFlat(true);
+        button->setCursor(Qt::PointingHandCursor);
+        connect(button, &QPushButton::clicked, this, [this, path = crumb.second] {
+            emit breadcrumbRequested(path);
+        });
+        breadcrumb_layout_->addWidget(button, 0);
+        repolish(button);
+
+        if (i < crumbs.size() - 1) {
+            auto* separator = new QLabel(QStringLiteral("/"), breadcrumb_row_);
+            separator->setObjectName(QStringLiteral("fileBreadcrumbSep"));
+            breadcrumb_layout_->addWidget(separator, 0);
+        }
+    }
+    breadcrumb_layout_->addStretch(1);
+}
+
+void FilePanel::setContextSummary(const QString& title, const QString& meta) {
+    if (path_label_) {
+        path_label_->setText(title);
+    }
+    if (path_meta_label_) {
+        path_meta_label_->setText(meta);
+        path_meta_label_->setVisible(!meta.trimmed().isEmpty());
     }
 }
 
@@ -429,6 +482,14 @@ void FilePanel::refreshSelectionHighlights() {
         }
         repolish(widget);
     }
+}
+
+void FilePanel::clearCurrentSelection() {
+    if (!file_list_) {
+        return;
+    }
+    file_list_->clearSelection();
+    file_list_->setCurrentItem(nullptr);
 }
 
 QString FilePanel::searchText() const {

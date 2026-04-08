@@ -4,6 +4,7 @@
 // =============================================================
 
 #include "online_user_dialog.h"
+#include "ui/widget_helpers.h"
 
 #include <QFrame>
 #include <QGraphicsDropShadowEffect>
@@ -17,46 +18,28 @@
 
 #include <algorithm>
 
+using namespace cv_ui;
+
 namespace {
 
-void applyShadow(QWidget* widget) {
-    auto* effect = new QGraphicsDropShadowEffect(widget);
-    effect->setBlurRadius(40);
-    effect->setOffset(0, 8);
-    effect->setColor(QColor(17, 24, 39, 30));
-    widget->setGraphicsEffect(effect);
-}
-
-int avatarVariantForSeed(const QString& seed) {
-    return static_cast<int>(qHash(seed)) % 6;
-}
-
-void prepareAvatarBadge(QLabel* label, const QString& seed, int size) {
-    label->setObjectName(QStringLiteral("avatarBadge"));
-    label->setProperty("variant", avatarVariantForSeed(seed));
-    label->setAlignment(Qt::AlignCenter);
-    label->setFixedSize(size, size);
-    label->setText(seed.left(1).toUpper());
-    label->setStyleSheet(QStringLiteral("border-radius:%1px;").arg(size / 2));
-    label->style()->unpolish(label);
-    label->style()->polish(label);
-}
-
-QWidget* createUserRow(const QString& username, QWidget* parent = nullptr) {
+QWidget* createUserRow(const cloudvault::FriendProfile& profile, QWidget* parent = nullptr) {
     auto* row = new QWidget(parent);
     auto* layout = new QHBoxLayout(row);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(10);
 
     auto* avatar = new QLabel(row);
-    prepareAvatarBadge(avatar, username, 32);
+    prepareAvatarBadge(avatar, profile.username, 32);
     layout->addWidget(avatar);
 
     auto* text_layout = new QVBoxLayout();
     text_layout->setContentsMargins(0, 0, 0, 0);
     text_layout->setSpacing(1);
 
-    auto* name_label = new QLabel(username, row);
+    const QString display_name = profile.nickname.trimmed().isEmpty()
+        ? profile.username
+        : profile.nickname.trimmed();
+    auto* name_label = new QLabel(display_name, row);
     name_label->setObjectName(QStringLiteral("dialogItemTitle"));
     text_layout->addWidget(name_label);
 
@@ -74,7 +57,7 @@ QWidget* createUserRow(const QString& username, QWidget* parent = nullptr) {
 
 } // namespace
 
-OnlineUserDialog::OnlineUserDialog(const QList<QPair<QString, bool>>& users,
+OnlineUserDialog::OnlineUserDialog(const QList<cloudvault::FriendProfile>& users,
                                    QWidget* parent)
     : QDialog(parent), users_(users) {
     setupUi();
@@ -82,7 +65,7 @@ OnlineUserDialog::OnlineUserDialog(const QList<QPair<QString, bool>>& users,
     populateList();
 }
 
-void OnlineUserDialog::setUsers(const QList<QPair<QString, bool>>& users) {
+void OnlineUserDialog::setUsers(const QList<cloudvault::FriendProfile>& users) {
     users_ = users;
     populateList(search_edit_ ? search_edit_->text() : QString());
 }
@@ -199,19 +182,24 @@ void OnlineUserDialog::populateList(const QString& keyword) {
 
     int online_count = 0;
     const QString trimmed = keyword.trimmed();
-    for (const auto& [username, online] : users_) {
-        if (!online) {
+    for (const auto& profile : users_) {
+        if (!profile.online) {
             continue;
         }
         ++online_count;
-        if (!trimmed.isEmpty() && !username.contains(trimmed, Qt::CaseInsensitive)) {
+        const QString display_name = profile.nickname.trimmed().isEmpty()
+            ? profile.username
+            : profile.nickname.trimmed();
+        if (!trimmed.isEmpty()
+            && !profile.username.contains(trimmed, Qt::CaseInsensitive)
+            && !display_name.contains(trimmed, Qt::CaseInsensitive)) {
             continue;
         }
 
         auto* item = new QListWidgetItem(user_list_);
-        item->setData(Qt::UserRole, username);
+        item->setData(Qt::UserRole, profile.username);
         item->setSizeHint(QSize(0, 48));
-        user_list_->setItemWidget(item, createUserRow(username, user_list_));
+        user_list_->setItemWidget(item, createUserRow(profile, user_list_));
     }
 
     title_label_->setText(QStringLiteral("在线用户（%1）").arg(online_count));

@@ -4,6 +4,7 @@
 // =============================================================
 
 #include "share_file_dialog.h"
+#include "ui/widget_helpers.h"
 
 #include <QAbstractItemView>
 #include <QCheckBox>
@@ -18,55 +19,37 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+using namespace cv_ui;
+
 namespace {
 
-void applyShadow(QWidget* widget) {
-    auto* effect = new QGraphicsDropShadowEffect(widget);
-    effect->setBlurRadius(40);
-    effect->setOffset(0, 8);
-    effect->setColor(QColor(17, 24, 39, 30));
-    widget->setGraphicsEffect(effect);
-}
-
-int avatarVariantForSeed(const QString& seed) {
-    return static_cast<int>(qHash(seed)) % 6;
-}
-
-void prepareAvatarBadge(QLabel* label, const QString& seed, int size) {
-    label->setObjectName(QStringLiteral("avatarBadge"));
-    label->setProperty("variant", avatarVariantForSeed(seed));
-    label->setAlignment(Qt::AlignCenter);
-    label->setFixedSize(size, size);
-    label->setText(seed.left(1).toUpper());
-    label->setStyleSheet(QStringLiteral("border-radius:%1px;").arg(size / 2));
-    label->style()->unpolish(label);
-    label->style()->polish(label);
-}
-
-QWidget* createFriendRow(const QString& username, bool online, QWidget* parent = nullptr) {
+QWidget* createFriendRow(const cloudvault::FriendProfile& profile, QWidget* parent = nullptr) {
     auto* row = new QWidget(parent);
     auto* layout = new QHBoxLayout(row);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(10);
 
     auto* checkbox = new QCheckBox(row);
-    checkbox->setProperty("username", username);
-    checkbox->setEnabled(online);
+    checkbox->setProperty("username", profile.username);
+    checkbox->setEnabled(profile.online);
     layout->addWidget(checkbox);
 
     auto* avatar = new QLabel(row);
-    prepareAvatarBadge(avatar, username, 28);
+    prepareAvatarBadge(avatar, profile.username, 28);
     layout->addWidget(avatar);
 
     auto* text_layout = new QVBoxLayout();
     text_layout->setContentsMargins(0, 0, 0, 0);
     text_layout->setSpacing(1);
 
-    auto* name_label = new QLabel(username, row);
+    const QString display_name = profile.nickname.trimmed().isEmpty()
+        ? profile.username
+        : profile.nickname.trimmed();
+    auto* name_label = new QLabel(display_name, row);
     name_label->setObjectName(QStringLiteral("dialogItemTitle"));
     text_layout->addWidget(name_label);
 
-    auto* meta_label = new QLabel(online
+    auto* meta_label = new QLabel(profile.online
                                       ? QStringLiteral("在线，可立即接收")
                                       : QStringLiteral("离线，暂不可接收"),
                                   row);
@@ -84,7 +67,7 @@ QCheckBox* rowCheckBox(QWidget* row) {
 } // namespace
 
 ShareFileDialog::ShareFileDialog(const QString& file_name,
-                                 const QList<QPair<QString, bool>>& friends,
+                                 const QList<cloudvault::FriendProfile>& friends,
                                  QWidget* parent)
     : QDialog(parent), file_name_(file_name), friends_(friends) {
     setupUi();
@@ -229,20 +212,25 @@ void ShareFileDialog::populateList(const QString& keyword) {
     int visible_count = 0;
     int online_count = 0;
 
-    for (const auto& [username, online] : friends_) {
-        if (!trimmed.isEmpty() && !username.contains(trimmed, Qt::CaseInsensitive)) {
+    for (const auto& profile : friends_) {
+        const QString display_name = profile.nickname.trimmed().isEmpty()
+            ? profile.username
+            : profile.nickname.trimmed();
+        if (!trimmed.isEmpty()
+            && !profile.username.contains(trimmed, Qt::CaseInsensitive)
+            && !display_name.contains(trimmed, Qt::CaseInsensitive)) {
             continue;
         }
 
         auto* item = new QListWidgetItem(friend_list_);
         item->setSizeHint(QSize(0, 48));
-        auto* row = createFriendRow(username, online, friend_list_);
+        auto* row = createFriendRow(profile, friend_list_);
         if (auto* checkbox = rowCheckBox(row)) {
             connect(checkbox, &QCheckBox::toggled, this, &ShareFileDialog::updateConfirmButton);
         }
         friend_list_->setItemWidget(item, row);
         ++visible_count;
-        if (online) {
+        if (profile.online) {
             ++online_count;
         }
     }

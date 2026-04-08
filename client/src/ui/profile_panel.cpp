@@ -4,6 +4,7 @@
 // =============================================================
 
 #include "profile_panel.h"
+#include "ui/widget_helpers.h"
 
 #include <QFrame>
 #include <QGraphicsDropShadowEffect>
@@ -15,43 +16,7 @@
 #include <QStyle>
 #include <QVBoxLayout>
 
-namespace {
-
-int avatarVariantForSeed(const QString& seed) {
-    return static_cast<int>(qHash(seed)) % 6;
-}
-
-void repolish(QWidget* widget) {
-    if (!widget) {
-        return;
-    }
-    widget->style()->unpolish(widget);
-    widget->style()->polish(widget);
-    widget->update();
-}
-
-void applyShadow(QWidget* widget, int blur = 32, int offset_y = 6, int alpha = 20) {
-    auto* effect = new QGraphicsDropShadowEffect(widget);
-    effect->setBlurRadius(blur);
-    effect->setOffset(0, offset_y);
-    effect->setColor(QColor(17, 24, 39, alpha));
-    widget->setGraphicsEffect(effect);
-}
-
-void prepareAvatarBadge(QLabel* label, const QString& seed, int size) {
-    if (!label) {
-        return;
-    }
-    label->setObjectName(QStringLiteral("avatarBadge"));
-    label->setProperty("variant", avatarVariantForSeed(seed));
-    label->setAlignment(Qt::AlignCenter);
-    label->setFixedSize(size, size);
-    label->setText(seed.left(1).toUpper());
-    label->setStyleSheet(QStringLiteral("border-radius:%1px;").arg(size / 2));
-    repolish(label);
-}
-
-} // namespace
+using namespace cv_ui;
 
 ProfilePanel::ProfilePanel(const QString& current_username, QWidget* parent)
     : QWidget(parent) {

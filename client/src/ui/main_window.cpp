@@ -1,18 +1,19 @@
 // =============================================================
 // client/src/ui/main_window.cpp
-// 主窗口（消息 / 文件 / 我）
+// 主窗口（消息 / 联系人 / 文件 / 我）
 // =============================================================
 
 #include "main_window.h"
 
 #include "ui/chat_panel.h"
-#include "ui/detail_panel.h"
+#include "ui/contact_panel.h"
 #include "ui/file_panel.h"
 #include "ui/group_list_dialog.h"
 #include "ui/online_user_dialog.h"
 #include "ui/profile_panel.h"
 #include "ui/sidebar_panel.h"
 #include "ui/share_file_dialog.h"
+#include "ui/widget_helpers.h"
 
 #include <algorithm>
 
@@ -32,6 +33,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
@@ -50,78 +52,36 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+using namespace cv_ui;
+
 namespace {
 
 QString formatPresence(bool online) {
     return online ? QStringLiteral("在线") : QStringLiteral("离线");
 }
 
-int avatarVariantForSeed(const QString& seed) {
-    return static_cast<int>(qHash(seed)) % 6;
+const cloudvault::FriendProfile* findFriendProfile(
+    const QList<cloudvault::FriendProfile>& friends,
+    const QString& username) {
+    const auto it = std::find_if(friends.cbegin(),
+                                 friends.cend(),
+                                 [&username](const cloudvault::FriendProfile& item) {
+                                     return item.username == username;
+                                 });
+    return it != friends.cend() ? &(*it) : nullptr;
 }
 
-void repolish(QWidget* widget) {
-    if (!widget) {
-        return;
+bool lookupFriendOnline(const QList<cloudvault::FriendProfile>& friends, const QString& username) {
+    const cloudvault::FriendProfile* profile = findFriendProfile(friends, username);
+    return profile && profile->online;
+}
+
+QString friendDisplayName(const cloudvault::FriendProfile* profile, const QString& fallback) {
+    if (!profile) {
+        return fallback;
     }
-    widget->style()->unpolish(widget);
-    widget->style()->polish(widget);
-    widget->update();
-}
-
-void applyShadow(QWidget* widget, int blur = 40, int offset_y = 8, int alpha = 30) {
-    auto* effect = new QGraphicsDropShadowEffect(widget);
-    effect->setBlurRadius(blur);
-    effect->setOffset(0, offset_y);
-    effect->setColor(QColor(17, 24, 39, alpha));
-    widget->setGraphicsEffect(effect);
-}
-
-void prepareAvatarBadge(QLabel* label, const QString& seed, int size) {
-    if (!label) {
-        return;
-    }
-    label->setObjectName(QStringLiteral("avatarBadge"));
-    label->setProperty("variant", avatarVariantForSeed(seed));
-    label->setAlignment(Qt::AlignCenter);
-    label->setFixedSize(size, size);
-    label->setText(seed.left(1).toUpper());
-    label->setStyleSheet(QStringLiteral("border-radius:%1px;").arg(size / 2));
-    repolish(label);
-}
-
-QWidget* createAvatarWidget(const QString& seed,
-                            int size,
-                            bool online,
-                            QWidget* parent = nullptr) {
-    auto* wrap = new QWidget(parent);
-    wrap->setFixedSize(size, size);
-
-    auto* avatar = new QLabel(wrap);
-    prepareAvatarBadge(avatar, seed, size);
-    avatar->move(0, 0);
-
-    if (size >= 34) {
-        auto* dot = new QLabel(wrap);
-        dot->setObjectName(QStringLiteral("onlineDot"));
-        dot->setFixedSize(10, 10);
-        dot->move(size - 12, size - 12);
-        dot->setVisible(online);
-    }
-
-    return wrap;
-}
-
-QPushButton* createIconButton(const QString& text,
-                              const QString& tooltip,
-                              int size,
-                              QWidget* parent = nullptr) {
-    auto* button = new QPushButton(text, parent);
-    button->setObjectName(QStringLiteral("iconBtn"));
-    button->setCursor(Qt::PointingHandCursor);
-    button->setFixedSize(size, size);
-    button->setToolTip(tooltip);
-    return button;
+    const QString nickname = profile->nickname.trimmed();
+    return nickname.isEmpty() ? profile->username : nickname;
 }
 
 QString formatConversationPreview(const QString& content, bool outgoing) {
@@ -175,25 +135,11 @@ QString formatConversationTime(const QString& timestamp) {
     return dt.date().toString(QStringLiteral("yyyy-MM-dd"));
 }
 
-QString formatFileSize(quint64 size) {
-    static const char* units[] = {"B", "KB", "MB", "GB"};
-    double value = static_cast<double>(size);
-    int unit_index = 0;
-    while (value >= 1024.0 && unit_index < 3) {
-        value /= 1024.0;
-        ++unit_index;
-    }
-    if (unit_index == 0) {
-        return QStringLiteral("%1 %2").arg(static_cast<qulonglong>(size)).arg(units[unit_index]);
-    }
-    return QStringLiteral("%1 %2")
-        .arg(QString::number(value, 'f', value >= 10.0 ? 1 : 2))
-        .arg(units[unit_index]);
-}
-
 } // namespace
 
 MainWindow::MainWindow(const QString& username,
+                       cloudvault::AuthService& auth_service,
+                       cloudvault::GroupService& group_service,
                        cloudvault::ChatService& chat_service,
                        cloudvault::FriendService& friend_service,
                        cloudvault::FileService& file_service,
@@ -201,6 +147,8 @@ MainWindow::MainWindow(const QString& username,
                        QWidget* parent)
     : QMainWindow(parent),
       current_username_(username),
+      auth_service_(auth_service),
+      group_service_(group_service),
       chat_service_(chat_service),
       friend_service_(friend_service),
       file_service_(file_service),
@@ -209,6 +157,7 @@ MainWindow::MainWindow(const QString& username,
     connectSignals();
     loadProfileDraft();
     friend_service_.flushFriends();
+    group_service_.getGroupList();
     file_service_.listFiles(current_file_path_);
     switchMainTab(0);
 }
@@ -322,6 +271,11 @@ void MainWindow::setupUi() {
     }
 
     {
+        contact_panel_widget_ = new ContactPanel(current_username_, center_stack_);
+        center_stack_->addWidget(contact_panel_widget_);
+    }
+
+    {
         file_panel_widget_ = new FilePanel(center_stack_);
         center_stack_->addWidget(file_panel_widget_);
     }
@@ -331,18 +285,15 @@ void MainWindow::setupUi() {
         center_stack_->addWidget(profile_panel_widget_);
     }
 
-    detail_panel_widget_ = new DetailPanel(current_username_, content_splitter_);
-    detail_panel_ = detail_panel_widget_;
-
     content_splitter_->addWidget(sidebar_widget_);
     content_splitter_->addWidget(center_panel);
-    content_splitter_->addWidget(detail_panel_widget_);
     content_splitter_->setStretchFactor(1, 1);
-    content_splitter_->setSizes({240, 560, 220});
+    content_splitter_->setSizes({260, 780});
     shell_layout->addWidget(content_root_, 1);
 
     setCentralWidget(shell);
     showChatEmptyState();
+    showContactEmptyState();
     hideTransferRow();
     resetFileActionSummary();
     refreshIconBarActiveState();
@@ -350,14 +301,9 @@ void MainWindow::setupUi() {
 
 void MainWindow::connectSignals() {
     connect(message_tab_btn_, &QPushButton::clicked, this, [this] { switchMainTab(0); });
-    connect(file_tab_btn_, &QPushButton::clicked, this, [this] { switchMainTab(1); });
-    connect(avatar_tab_btn_, &QPushButton::clicked, this, [this] { switchMainTab(2); });
-    connect(contact_tab_btn_, &QPushButton::clicked, this, [this] {
-        contact_tab_btn_->setProperty("active", true);
-        repolish(contact_tab_btn_);
-        openOnlineUserDialog();
-        refreshIconBarActiveState();
-    });
+    connect(contact_tab_btn_, &QPushButton::clicked, this, [this] { switchMainTab(1); });
+    connect(file_tab_btn_, &QPushButton::clicked, this, [this] { switchMainTab(2); });
+    connect(avatar_tab_btn_, &QPushButton::clicked, this, [this] { switchMainTab(3); });
     connect(settings_tab_btn_, &QPushButton::clicked, this, [this] {
         QMessageBox::information(this, QStringLiteral("设置"), QStringLiteral("设置功能开发中。"));
     });
@@ -367,11 +313,77 @@ void MainWindow::connectSignals() {
     connect(chat_panel_widget_, &ChatPanel::groupListRequested,
             this, &MainWindow::openGroupListDialog);
     connect(sidebar_widget_, &SidebarPanel::searchTextChanged,
-            this, &MainWindow::filterFriendList);
+            this, [this](const QString& text) {
+                if (active_main_view_ == MainView::Contact) {
+                    filterContactList(text);
+                } else {
+                    filterFriendList(text);
+                }
+            });
     connect(sidebar_widget_, &SidebarPanel::contactSelectionChanged,
-            this, &MainWindow::applySelectedFriend);
+            this, &MainWindow::applySelectedSidebarItem);
     connect(sidebar_widget_, &SidebarPanel::actionRequested,
-            this, &MainWindow::openOnlineUserDialog);
+            this, [this] {
+                QMenu menu(this);
+                QAction* add_friend = menu.addAction(QStringLiteral("添加好友"));
+                QAction* create_group = menu.addAction(QStringLiteral("发起群聊"));
+                QAction* open_group_list = nullptr;
+                if (active_main_view_ == MainView::Message) {
+                    open_group_list = menu.addAction(QStringLiteral("群组列表"));
+                }
+                QAction* chosen = menu.exec(QCursor::pos());
+                if (chosen == add_friend) {
+                    openOnlineUserDialog();
+                } else if (chosen == create_group) {
+                    openGroupListDialog();
+                } else if (chosen == open_group_list) {
+                    openGroupListDialog();
+                }
+            });
+
+    connect(contact_panel_widget_, &ContactPanel::sendMessageRequested,
+            this, &MainWindow::navigateToChatWithFriend);
+    connect(contact_panel_widget_, &ContactPanel::shareFileRequested,
+            this, [this](const QString& username) {
+                switchMainTab(2);
+                setFileStatus(QStringLiteral("请在文件页选择文件后分享给 %1。").arg(username));
+            });
+    connect(contact_panel_widget_, &ContactPanel::deleteFriendRequested,
+            this, [this](const QString& username) {
+                const auto reply = QMessageBox::question(
+                    this,
+                    QStringLiteral("删除好友"),
+                    QStringLiteral("确认删除好友“%1”吗？").arg(username),
+                    QMessageBox::Yes | QMessageBox::No);
+                if (reply == QMessageBox::Yes) {
+                    friend_service_.deleteFriend(username);
+                }
+            });
+    connect(contact_panel_widget_, &ContactPanel::acceptFriendRequestRequested,
+            this, [this](const QString& username) {
+                if (!username.isEmpty()) {
+                    friend_service_.agreeFriend(username);
+                }
+            });
+    connect(contact_panel_widget_, &ContactPanel::openGroupChatRequested,
+            this, &MainWindow::navigateToChatWithGroup);
+    connect(contact_panel_widget_, &ContactPanel::viewGroupMembersRequested,
+            this, [this](int group_id) {
+                QMessageBox::information(this,
+                                         QStringLiteral("群成员"),
+                                         QStringLiteral("群 %1 的成员详情面板后续补充。").arg(group_id));
+            });
+    connect(contact_panel_widget_, &ContactPanel::leaveGroupRequested,
+            this, [this](int group_id) {
+                const auto reply = QMessageBox::question(
+                    this,
+                    QStringLiteral("退出群组"),
+                    QStringLiteral("确认退出该群组吗？"),
+                    QMessageBox::Yes | QMessageBox::No);
+                if (reply == QMessageBox::Yes) {
+                    group_service_.leaveGroup(group_id);
+                }
+            });
 
     connect(profile_panel_widget_, &ProfilePanel::saveRequested,
             this, &MainWindow::saveProfileDraft);
@@ -379,6 +391,14 @@ void MainWindow::connectSignals() {
             this, &MainWindow::loadProfileDraft);
     connect(profile_panel_widget_, &ProfilePanel::logoutRequested,
             this, &MainWindow::logoutRequested);
+    connect(&auth_service_, &cloudvault::AuthService::profileUpdateSuccess,
+            this, [this] {
+                setFileStatus(QStringLiteral("个人资料已同步到服务端。"));
+            });
+    connect(&auth_service_, &cloudvault::AuthService::profileUpdateFailed,
+            this, [this](const QString& reason) {
+                QMessageBox::warning(this, QStringLiteral("资料更新失败"), reason);
+            });
 
     connect(file_panel_widget_, &FilePanel::backRequested, this, &MainWindow::openCurrentParentDirectory);
     connect(file_panel_widget_, &FilePanel::uploadRequested, this, &MainWindow::uploadFile);
@@ -395,6 +415,8 @@ void MainWindow::connectSignals() {
     connect(file_panel_widget_, &FilePanel::createRequested, this, &MainWindow::createDirectory);
     connect(file_panel_widget_, &FilePanel::searchRequested, this, &MainWindow::runFileSearch);
     connect(file_panel_widget_, &FilePanel::searchTextChanged, this, &MainWindow::clearFileSearchIfNeeded);
+    connect(file_panel_widget_, &FilePanel::breadcrumbRequested,
+            this, &MainWindow::navigateToFilePath);
     connect(file_panel_widget_, &FilePanel::selectionChanged, this, &MainWindow::applySelectedFile);
     connect(file_panel_widget_, &FilePanel::itemActivated,
             this, [this] {
@@ -438,7 +460,7 @@ void MainWindow::connectSignals() {
                     if (chat_panel_widget_) {
                         chat_panel_widget_->appendMessage(message, current_username_);
                     }
-                    showChatConversation(peer, sidebar_widget_ ? sidebar_widget_->currentOnline() : false);
+                    showChatConversation(peer, lookupFriendOnline(friends_, peer));
                 }
             });
     connect(&chat_service_, &cloudvault::ChatService::historyLoaded,
@@ -464,7 +486,7 @@ void MainWindow::connectSignals() {
                     }
                 }
                 saveConversationReadAt(peer, latest_incoming);
-                showChatConversation(peer, sidebar_widget_ ? sidebar_widget_->currentOnline() : false);
+                showChatConversation(peer, lookupFriendOnline(friends_, peer));
             });
     connect(&chat_service_, &cloudvault::ChatService::historyLoadFailed,
             this, [this](const QString& peer, const QString& reason) {
@@ -472,23 +494,108 @@ void MainWindow::connectSignals() {
                 if (peer != active_chat_peer_) {
                     return;
                 }
-                showChatConversation(peer, sidebar_widget_ ? sidebar_widget_->currentOnline() : false);
+                showChatConversation(peer, lookupFriendOnline(friends_, peer));
                 if (chat_panel_widget_) {
                     chat_panel_widget_->setConversationStatus(reason);
+                }
+            });
+    connect(&chat_service_, &cloudvault::ChatService::groupHistoryLoaded,
+            this, [this](int group_id, const QList<cloudvault::ChatMessage>& messages) {
+                group_messages_[group_id] = messages;
+                if (group_id == active_group_id_ && chat_panel_widget_) {
+                    chat_panel_widget_->rebuildMessages(messages, current_username_);
+                }
+            });
+
+    connect(&group_service_, &cloudvault::GroupService::groupListReceived,
+            this, &MainWindow::refreshGroupList);
+    connect(&group_service_, &cloudvault::GroupService::groupCreated,
+            this, [this](int group_id, const QString& name) {
+                auto& summary = group_summaries_[group_id];
+                summary.name = name;
+                group_service_.getGroupList();
+                QMessageBox::information(this,
+                                         QStringLiteral("群组"),
+                                         QStringLiteral("已创建群组：%1").arg(name));
+                showGroupConversation(group_id);
+            });
+    connect(&group_service_, &cloudvault::GroupService::groupCreateFailed,
+            this, [this](const QString& reason) {
+                QMessageBox::warning(this, QStringLiteral("创建群组失败"), reason);
+            });
+    connect(&group_service_, &cloudvault::GroupService::joinedGroup,
+            this, [this](int) { group_service_.getGroupList(); });
+    connect(&group_service_, &cloudvault::GroupService::joinFailed,
+            this, [this](const QString& reason) {
+                QMessageBox::warning(this, QStringLiteral("加入群组失败"), reason);
+            });
+    connect(&group_service_, &cloudvault::GroupService::leftGroup,
+            this, [this](int group_id) {
+                group_messages_.remove(group_id);
+                if (group_id == active_group_id_) {
+                    showChatEmptyState();
+                }
+                if (group_id == active_contact_group_id_) {
+                    showContactEmptyState();
+                }
+                group_service_.getGroupList();
+            });
+    connect(&group_service_, &cloudvault::GroupService::leaveFailed,
+            this, [this](const QString& reason) {
+                QMessageBox::warning(this, QStringLiteral("退出群组失败"), reason);
+            });
+    connect(&group_service_, &cloudvault::GroupService::groupMessageReceived,
+            this, [this](const QString& from, int group_id, const QString& content, const QString& timestamp) {
+                const QString group_name = group_summaries_.value(group_id).name;
+                const cloudvault::ChatMessage message{
+                    group_id,
+                    from,
+                    group_name,
+                    content,
+                    timestamp,
+                };
+                auto& cache = group_messages_[group_id];
+                cache.append(message);
+
+                auto it = group_summaries_.find(group_id);
+                if (it != group_summaries_.end() && group_id != active_group_id_) {
+                    ++it->unread_count;
+                }
+
+                if (group_id == active_group_id_ && chat_panel_widget_) {
+                    chat_panel_widget_->appendMessage(message, current_username_);
+                    if (auto summary = group_summaries_.value(group_id); !summary.name.isEmpty()) {
+                        chat_panel_widget_->setConversationStatus(
+                            QStringLiteral("%1 人在线").arg(summary.online_count));
+                    }
                 }
             });
 
     connect(&friend_service_, &cloudvault::FriendService::friendsRefreshed,
             this, &MainWindow::refreshFriendList);
     connect(&friend_service_, &cloudvault::FriendService::friendAdded,
-            this, [this](const QString&) { friend_service_.flushFriends(); });
+            this, [this](const QString& username) {
+                incoming_friend_requests_.removeAll(username);
+                outgoing_friend_requests_.removeAll(username);
+                friend_service_.flushFriends();
+                refreshSidebarForCurrentMode();
+            });
     connect(&friend_service_, &cloudvault::FriendService::friendDeleted,
-            this, [this](const QString&) { friend_service_.flushFriends(); });
+            this, [this](const QString& username) {
+                if (username == active_chat_peer_) {
+                    showChatEmptyState();
+                }
+                if (username == active_contact_friend_) {
+                    showContactEmptyState();
+                }
+                friend_service_.flushFriends();
+            });
     connect(&friend_service_, &cloudvault::FriendService::friendRequestSent,
             this, [this](const QString& target) {
-                QMessageBox::information(this,
-                                         QStringLiteral("好友申请"),
-                                         QStringLiteral("已向 %1 发送好友申请。").arg(target));
+                if (!target.isEmpty() && !outgoing_friend_requests_.contains(target)) {
+                    outgoing_friend_requests_.prepend(target);
+                }
+                refreshSidebarForCurrentMode();
             });
     connect(&friend_service_, &cloudvault::FriendService::friendAddFailed,
             this, [this](const QString& reason) {
@@ -496,14 +603,10 @@ void MainWindow::connectSignals() {
             });
     connect(&friend_service_, &cloudvault::FriendService::incomingFriendRequest,
             this, [this](const QString& from) {
-                const auto reply = QMessageBox::question(
-                    this,
-                    QStringLiteral("好友申请"),
-                    QStringLiteral("%1 想添加你为好友，是否同意？").arg(from),
-                    QMessageBox::Yes | QMessageBox::No);
-                if (reply == QMessageBox::Yes) {
-                    friend_service_.agreeFriend(from);
+                if (!from.isEmpty() && !incoming_friend_requests_.contains(from)) {
+                    incoming_friend_requests_.prepend(from);
                 }
+                refreshSidebarForCurrentMode();
             });
 
     connect(&file_service_, &cloudvault::FileService::filesListed,
@@ -514,6 +617,7 @@ void MainWindow::connectSignals() {
             this, [this](const QString& keyword, const cloudvault::FileEntries& entries) {
                 file_search_mode_ = true;
                 current_file_query_ = keyword;
+                active_file_context_key_ = QStringLiteral("file:search");
                 refreshFileList(QStringLiteral("搜索：%1").arg(keyword), entries);
             });
     connect(&file_service_, &cloudvault::FileService::searchFailed,
@@ -523,6 +627,7 @@ void MainWindow::connectSignals() {
                 setFileStatus(message);
                 file_search_mode_ = false;
                 current_file_query_.clear();
+                active_file_context_key_ = QStringLiteral("file:current");
                 if (file_panel_widget_) {
                     file_panel_widget_->clearSearch();
                 }
@@ -538,6 +643,11 @@ void MainWindow::connectSignals() {
                 showTransferRow(QStringLiteral("上传 %1").arg(filename), percent, true);
                 setFileStatus(QStringLiteral("正在上传 %1 · %2 / %3")
                                   .arg(filename, formatFileSize(sent), formatFileSize(total)));
+                upsertRecentTransfer(QStringLiteral("upload:%1").arg(filename),
+                                     filename,
+                                     QStringLiteral("上传中 %1 / %2")
+                                         .arg(formatFileSize(sent), formatFileSize(total)),
+                                     QStringLiteral("%1%").arg(percent));
             });
     connect(&file_service_, &cloudvault::FileService::uploadFinished,
             this, [this](const QString& remote_path, const QString& message) {
@@ -550,6 +660,10 @@ void MainWindow::connectSignals() {
                 }
                 file_service_.listFiles(current_file_path_);
                 QTimer::singleShot(0, this, &MainWindow::startNextQueuedUpload);
+                upsertRecentTransfer(QStringLiteral("upload:%1").arg(QFileInfo(remote_path).fileName()),
+                                     QFileInfo(remote_path).fileName(),
+                                     QStringLiteral("上传完成"),
+                                     QStringLiteral("DONE"));
                 QTimer::singleShot(1500, this, [this] {
                     if (!file_service_.hasActiveTransfer() && pending_upload_paths_.isEmpty()) {
                         hideTransferRow();
@@ -560,6 +674,10 @@ void MainWindow::connectSignals() {
             this, [this](const QString& message) {
                 showTransferRow(QStringLiteral("上传失败"), 0, !pending_upload_paths_.isEmpty());
                 setFileStatus(message, true);
+                upsertRecentTransfer(QStringLiteral("upload:error:%1").arg(QDateTime::currentMSecsSinceEpoch()),
+                                     QStringLiteral("上传失败"),
+                                     message,
+                                     QStringLiteral("ERR"));
                 QTimer::singleShot(0, this, &MainWindow::startNextQueuedUpload);
                 QTimer::singleShot(1500, this, [this] {
                     if (!file_service_.hasActiveTransfer() && pending_upload_paths_.isEmpty()) {
@@ -575,11 +693,20 @@ void MainWindow::connectSignals() {
                 showTransferRow(QStringLiteral("下载 %1").arg(filename), percent, true);
                 setFileStatus(QStringLiteral("正在下载 %1 · %2 / %3")
                                   .arg(filename, formatFileSize(received), formatFileSize(total)));
+                upsertRecentTransfer(QStringLiteral("download:%1").arg(filename),
+                                     filename,
+                                     QStringLiteral("下载中 %1 / %2")
+                                         .arg(formatFileSize(received), formatFileSize(total)),
+                                     QStringLiteral("%1%").arg(percent));
             });
     connect(&file_service_, &cloudvault::FileService::downloadFinished,
             this, [this](const QString& local_path, const QString& message) {
                 showTransferRow(QStringLiteral("下载完成"), 100, false);
                 setFileStatus(QStringLiteral("%1 · %2").arg(message, local_path));
+                upsertRecentTransfer(QStringLiteral("download:%1").arg(QFileInfo(local_path).fileName()),
+                                     QFileInfo(local_path).fileName(),
+                                     QStringLiteral("下载完成"),
+                                     QStringLiteral("DONE"));
                 QTimer::singleShot(1500, this, &MainWindow::hideTransferRow);
                 QMessageBox::information(this, QStringLiteral("下载完成"), local_path);
             });
@@ -587,6 +714,10 @@ void MainWindow::connectSignals() {
             this, [this](const QString& message) {
                 showTransferRow(QStringLiteral("下载失败"), 0, false);
                 setFileStatus(message, true);
+                upsertRecentTransfer(QStringLiteral("download:error:%1").arg(QDateTime::currentMSecsSinceEpoch()),
+                                     QStringLiteral("下载失败"),
+                                     message,
+                                     QStringLiteral("ERR"));
                 QTimer::singleShot(1500, this, &MainWindow::hideTransferRow);
             });
 
@@ -616,6 +747,7 @@ void MainWindow::connectSignals() {
                 setFileStatus(message);
                 file_search_mode_ = false;
                 current_file_query_.clear();
+                active_file_context_key_ = QStringLiteral("file:root");
                 if (file_panel_widget_) {
                     file_panel_widget_->clearSearch();
                 }
@@ -629,12 +761,13 @@ void MainWindow::connectSignals() {
 
     auto* refresh_shortcut = new QShortcut(QKeySequence(Qt::Key_F5), this);
     connect(refresh_shortcut, &QShortcut::activated, this, [this] {
-        if (center_stack_->currentIndex() == 0) {
+        if (active_main_view_ == MainView::Message || active_main_view_ == MainView::Contact) {
             friend_service_.flushFriends();
+            group_service_.getGroupList();
             if (!active_chat_peer_.isEmpty()) {
                 requestConversationSnapshot(active_chat_peer_);
             }
-        } else if (center_stack_->currentIndex() == 1) {
+        } else if (active_main_view_ == MainView::File) {
             if (file_search_mode_ && !current_file_query_.isEmpty()) {
                 file_service_.search(current_file_query_);
             } else {
@@ -645,28 +778,28 @@ void MainWindow::connectSignals() {
 
     auto* delete_shortcut = new QShortcut(QKeySequence(Qt::Key_Delete), this);
     connect(delete_shortcut, &QShortcut::activated, this, [this] {
-        if (center_stack_->currentIndex() == 1 && file_panel_widget_ && file_panel_widget_->hasSelection()) {
+        if (active_main_view_ == MainView::File && file_panel_widget_ && file_panel_widget_->hasSelection()) {
             deleteSelectedFile();
         }
     });
 
     auto* rename_shortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
     connect(rename_shortcut, &QShortcut::activated, this, [this] {
-        if (center_stack_->currentIndex() == 1 && file_panel_widget_ && file_panel_widget_->hasSelection()) {
+        if (active_main_view_ == MainView::File && file_panel_widget_ && file_panel_widget_->hasSelection()) {
             renameSelectedFile();
         }
     });
 
     auto* back_shortcut = new QShortcut(QKeySequence(Qt::Key_Backspace), this);
     connect(back_shortcut, &QShortcut::activated, this, [this] {
-        if (center_stack_->currentIndex() == 1) {
+        if (active_main_view_ == MainView::File) {
             openCurrentParentDirectory();
         }
     });
 
     auto* focus_search_shortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+F")), this);
     connect(focus_search_shortcut, &QShortcut::activated, this, [this] {
-        if (center_stack_->currentIndex() == 1) {
+        if (active_main_view_ == MainView::File) {
             if (file_panel_widget_) {
                 file_panel_widget_->focusSearchSelectAll();
             }
@@ -675,7 +808,7 @@ void MainWindow::connectSignals() {
 
     auto* upload_shortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+U")), this);
     connect(upload_shortcut, &QShortcut::activated, this, [this] {
-        if (center_stack_->currentIndex() == 1) {
+        if (active_main_view_ == MainView::File) {
             uploadFile();
         }
     });
@@ -684,34 +817,67 @@ void MainWindow::connectSignals() {
 void MainWindow::showChatEmptyState() {
     active_chat_peer_.clear();
     active_group_name_.clear();
+    active_group_id_ = 0;
     if (chat_panel_widget_) {
         chat_panel_widget_->showEmptyState();
     }
-    if (detail_panel_widget_) {
-        detail_panel_widget_->showEmptyState(current_username_);
+}
+
+void MainWindow::showContactEmptyState() {
+    active_contact_friend_.clear();
+    active_contact_group_id_ = 0;
+    if (contact_panel_widget_) {
+        contact_panel_widget_->showEmptyState();
     }
 }
 
 void MainWindow::showChatConversation(const QString& username, bool online) {
     active_group_name_.clear();
+    active_group_id_ = 0;
+    const cloudvault::FriendProfile* profile = findFriendProfile(friends_, username);
+    const QString display_name = friendDisplayName(profile, username);
     if (chat_panel_widget_) {
-        chat_panel_widget_->showConversationHeader(username, formatPresence(online));
+        chat_panel_widget_->showConversation(display_name, formatPresence(online));
     }
-    if (detail_panel_widget_) {
-        detail_panel_widget_->showContact(username, online);
+}
+
+void MainWindow::showFriendDetails(const QString& username, bool online) {
+    active_contact_friend_ = username;
+    active_contact_group_id_ = 0;
+    const cloudvault::FriendProfile* profile = findFriendProfile(friends_, username);
+    const QString display_name = friendDisplayName(profile, username);
+    const QString signature = profile ? profile->signature.trimmed() : QString();
+
+    if (contact_panel_widget_) {
+        contact_panel_widget_->showFriendProfile(username,
+                                                 display_name,
+                                                 signature,
+                                                 online);
+    }
+}
+
+void MainWindow::showFriendRequestDetails(const QString& username, bool incoming) {
+    active_contact_group_id_ = 0;
+    active_contact_friend_ = username;
+    if (contact_panel_widget_) {
+        contact_panel_widget_->showFriendRequest(username, incoming);
+    }
+}
+
+void MainWindow::showGroupDetails(int group_id) {
+    const auto it = group_summaries_.find(group_id);
+    if (it == group_summaries_.end()) {
+        showContactEmptyState();
+        return;
     }
 
-    const auto summary_it = conversation_summaries_.constFind(username);
-    if (summary_it != conversation_summaries_.constEnd() && summary_it->has_message) {
-        if (detail_panel_widget_) {
-            detail_panel_widget_->addSharedSummary(QStringLiteral("最近会话"),
-                                                   summary_it->preview);
-        }
-    } else {
-        if (detail_panel_widget_) {
-            detail_panel_widget_->showSharedEmptyMessage(
-                QStringLiteral("暂无与 %1 的共享文件").arg(username));
-        }
+    active_contact_friend_.clear();
+    active_contact_group_id_ = group_id;
+    if (contact_panel_widget_) {
+        contact_panel_widget_->showGroupProfile(group_id,
+                                                it->name,
+                                                it->owner_id,
+                                                it->online_count);
     }
 }
 
@@ -741,7 +907,7 @@ void MainWindow::updateConversationSummary(const QString& peer,
         summary.has_message = true;
         summary.unread_count = (peer == active_chat_peer_) ? 0 : calculateUnreadCount(peer, messages);
     }
-    filterFriendList(sidebar_widget_ ? sidebar_widget_->searchText() : QString());
+    refreshSidebarForCurrentMode();
 }
 
 void MainWindow::applyConversationMessage(const cloudvault::ChatMessage& message, bool increment_unread) {
@@ -763,7 +929,7 @@ void MainWindow::applyConversationMessage(const cloudvault::ChatMessage& message
     } else if (increment_unread) {
         ++summary.unread_count;
     }
-    filterFriendList(sidebar_widget_ ? sidebar_widget_->searchText() : QString());
+    refreshSidebarForCurrentMode();
 }
 
 void MainWindow::clearConversationUnread(const QString& peer) {
@@ -772,7 +938,7 @@ void MainWindow::clearConversationUnread(const QString& peer) {
         return;
     }
     it->unread_count = 0;
-    filterFriendList(sidebar_widget_ ? sidebar_widget_->searchText() : QString());
+    refreshSidebarForCurrentMode();
 }
 
 int MainWindow::calculateUnreadCount(const QString& peer,
@@ -828,13 +994,12 @@ void MainWindow::saveConversationReadAt(const QString& peer, const QDateTime& ti
     settings.endGroup();
 }
 
-void MainWindow::refreshFriendList(const QList<QPair<QString, bool>>& friends) {
+void MainWindow::refreshFriendList(const QList<cloudvault::FriendProfile>& friends) {
     friends_ = friends;
     QSet<QString> current_peers;
-    for (const auto& [username, online] : friends_) {
-        Q_UNUSED(online);
-        current_peers.insert(username);
-        requestConversationSnapshot(username);
+    for (const auto& profile : friends_) {
+        current_peers.insert(profile.username);
+        requestConversationSnapshot(profile.username);
     }
 
     const auto known_peers = conversation_summaries_.keys();
@@ -844,19 +1009,25 @@ void MainWindow::refreshFriendList(const QList<QPair<QString, bool>>& friends) {
             pending_history_requests_.remove(peer);
         }
     }
-    filterFriendList(sidebar_widget_ ? sidebar_widget_->searchText() : QString());
+    if (!active_chat_peer_.isEmpty() && !current_peers.contains(active_chat_peer_)) {
+        showChatEmptyState();
+    }
+    if (!active_contact_friend_.isEmpty() && !current_peers.contains(active_contact_friend_)) {
+        showContactEmptyState();
+    }
+    refreshSidebarForCurrentMode();
 }
 
 void MainWindow::filterFriendList(const QString& keyword) {
     const QString current = !active_chat_peer_.isEmpty()
         ? active_chat_peer_
-        : (sidebar_widget_ ? sidebar_widget_->currentUsername() : QString());
+        : (sidebar_widget_ ? sidebar_widget_->currentKey() : QString());
     const QString trimmed = keyword.trimmed();
-    QList<QPair<QString, bool>> ordered_friends = friends_;
+    QList<cloudvault::FriendProfile> ordered_friends = friends_;
     std::sort(ordered_friends.begin(), ordered_friends.end(),
-              [this](const QPair<QString, bool>& lhs, const QPair<QString, bool>& rhs) {
-                  const auto lhs_summary = conversation_summaries_.constFind(lhs.first);
-                  const auto rhs_summary = conversation_summaries_.constFind(rhs.first);
+              [this](const cloudvault::FriendProfile& lhs, const cloudvault::FriendProfile& rhs) {
+                  const auto lhs_summary = conversation_summaries_.constFind(lhs.username);
+                  const auto rhs_summary = conversation_summaries_.constFind(rhs.username);
                   const bool lhs_has_message = lhs_summary != conversation_summaries_.constEnd()
                                             && lhs_summary->has_message;
                   const bool rhs_has_message = rhs_summary != conversation_summaries_.constEnd()
@@ -876,47 +1047,238 @@ void MainWindow::filterFriendList(const QString& keyword) {
                       }
                   }
 
-                  if (lhs.second != rhs.second) {
-                      return lhs.second;
+                  if (lhs.online != rhs.online) {
+                      return lhs.online;
                   }
-                  return QString::localeAwareCompare(lhs.first, rhs.first) < 0;
+                  const QString lhs_name = friendDisplayName(&lhs, lhs.username);
+                  const QString rhs_name = friendDisplayName(&rhs, rhs.username);
+                  return QString::localeAwareCompare(lhs_name, rhs_name) < 0;
               });
 
     {
-        QList<SidebarContactEntry> visible_contacts;
+        QList<SidebarEntry> visible_contacts;
 
-        for (const auto& [username, online] : ordered_friends) {
-            if (!trimmed.isEmpty() && !username.contains(trimmed, Qt::CaseInsensitive)) {
+        for (const auto& profile : ordered_friends) {
+            const QString display_name = friendDisplayName(&profile, profile.username);
+            if (!trimmed.isEmpty()
+                && !profile.username.contains(trimmed, Qt::CaseInsensitive)
+                && !display_name.contains(trimmed, Qt::CaseInsensitive)) {
                 continue;
             }
 
-            const auto summary_it = conversation_summaries_.constFind(username);
+            const auto summary_it = conversation_summaries_.constFind(profile.username);
             const bool has_message = summary_it != conversation_summaries_.constEnd()
                                   && summary_it->has_message;
-            SidebarContactEntry entry;
-            entry.username = username;
+            SidebarEntry entry;
+            entry.key = profile.username;
+            entry.title = display_name;
             entry.preview = has_message ? summary_it->preview : QStringLiteral("暂无消息");
             entry.time = has_message ? formatConversationTime(summary_it->timestamp) : QString();
             entry.unread = has_message ? summary_it->unread_count : 0;
-            entry.online = online;
+            entry.online = profile.online;
+            entry.type = SidebarItemType::Friend;
+            visible_contacts.append(entry);
+        }
+
+        for (auto it = group_summaries_.cbegin(); it != group_summaries_.cend(); ++it) {
+            if (!trimmed.isEmpty() && !it->name.contains(trimmed, Qt::CaseInsensitive)) {
+                continue;
+            }
+            const auto& cached_msgs = group_messages_.value(it.key());
+            const bool has_group_msg = !cached_msgs.isEmpty();
+            SidebarEntry entry;
+            entry.key = QStringLiteral("group:%1").arg(it.key());
+            entry.title = it->name;
+            entry.preview = has_group_msg
+                ? formatConversationPreview(cached_msgs.last().content, false)
+                : QStringLiteral("暂无消息");
+            entry.time = has_group_msg
+                ? formatConversationTime(cached_msgs.last().timestamp)
+                : QString();
+            entry.unread = it->unread_count;
+            entry.online = false;
+            entry.type = SidebarItemType::Group;
+            entry.id = it.key();
             visible_contacts.append(entry);
         }
 
         if (sidebar_widget_) {
-            sidebar_widget_->populateContacts(visible_contacts,
-                                             current,
-                                             current.isEmpty());
+            sidebar_widget_->populateEntries(visible_contacts,
+                                            current,
+                                            current.isEmpty());
         }
     }
 
-    if (!sidebar_widget_ || sidebar_widget_->contactCount() == 0) {
+    if (!sidebar_widget_ || sidebar_widget_->itemCount() == 0) {
         showChatEmptyState();
     }
 
     updateContactSelectionState();
 
-    if ((sidebar_widget_ ? sidebar_widget_->currentUsername() : QString()) != current) {
-        applySelectedFriend();
+    if ((sidebar_widget_ ? sidebar_widget_->currentKey() : QString()) != current) {
+        applySelectedSidebarItem();
+    }
+}
+
+void MainWindow::filterContactList(const QString& keyword) {
+    const QString trimmed = keyword.trimmed();
+    QString current;
+    if (!active_contact_friend_.isEmpty()) {
+        if (incoming_friend_requests_.contains(active_contact_friend_)) {
+            current = QStringLiteral("request:incoming:%1").arg(active_contact_friend_);
+        } else if (outgoing_friend_requests_.contains(active_contact_friend_)) {
+            current = QStringLiteral("request:outgoing:%1").arg(active_contact_friend_);
+        } else {
+            current = active_contact_friend_;
+        }
+    } else if (active_contact_group_id_ > 0) {
+        current = QStringLiteral("group:%1").arg(active_contact_group_id_);
+    }
+
+    QList<SidebarEntry> entries;
+
+    SidebarEntry entry;
+    entry.type = SidebarItemType::Section;
+    entry.title = QStringLiteral("新朋友");
+    entry.tag = QStringLiteral("快捷入口");
+    entries.append(entry);
+
+    entry = {};
+    entry.key = QStringLiteral("contact:new-friend");
+    entry.title = QStringLiteral("添加好友");
+    entry.preview = QStringLiteral("搜索用户并发送好友申请");
+    entry.type = SidebarItemType::Action;
+    entry.tag = QStringLiteral("NEW");
+    entries.append(entry);
+
+    entry = {};
+    entry.type = SidebarItemType::Section;
+    entry.title = QStringLiteral("我的好友");
+    entry.tag = QStringLiteral("%1").arg(friends_.size());
+    entries.append(entry);
+
+    for (const QString& username : incoming_friend_requests_) {
+        if (!trimmed.isEmpty() && !username.contains(trimmed, Qt::CaseInsensitive)) {
+            continue;
+        }
+        SidebarEntry req;
+        req.key = QStringLiteral("request:incoming:%1").arg(username);
+        req.title = username;
+        req.preview = QStringLiteral("收到的好友申请");
+        req.type = SidebarItemType::Action;
+        req.tag = QStringLiteral("IN");
+        entries.append(req);
+    }
+
+    for (const QString& username : outgoing_friend_requests_) {
+        if (!trimmed.isEmpty() && !username.contains(trimmed, Qt::CaseInsensitive)) {
+            continue;
+        }
+        SidebarEntry req;
+        req.key = QStringLiteral("request:outgoing:%1").arg(username);
+        req.title = username;
+        req.preview = QStringLiteral("已发送的好友申请");
+        req.type = SidebarItemType::Action;
+        req.tag = QStringLiteral("OUT");
+        entries.append(req);
+    }
+
+    for (const auto& profile : friends_) {
+        const QString display_name = friendDisplayName(&profile, profile.username);
+        if (!trimmed.isEmpty()
+            && !profile.username.contains(trimmed, Qt::CaseInsensitive)
+            && !display_name.contains(trimmed, Qt::CaseInsensitive)) {
+            continue;
+        }
+        SidebarEntry entry;
+        entry.key = profile.username;
+        entry.title = display_name;
+        entry.preview = profile.signature.trimmed().isEmpty()
+            ? (profile.online ? QStringLiteral("好友 · 在线") : QStringLiteral("好友 · 离线"))
+            : profile.signature.trimmed();
+        entry.online = profile.online;
+        entry.type = SidebarItemType::Friend;
+        entry.tag = !profile.nickname.trimmed().isEmpty() ? QStringLiteral("PROFILE") : QString();
+        entries.append(entry);
+    }
+    QList<SidebarEntry> friend_entries;
+    QList<SidebarEntry> group_entries;
+    for (const auto& item : entries) {
+        if (item.type == SidebarItemType::Friend) {
+            friend_entries.append(item);
+        }
+    }
+    std::sort(friend_entries.begin(), friend_entries.end(), [](const SidebarEntry& lhs, const SidebarEntry& rhs) {
+        if (lhs.online != rhs.online) {
+            return lhs.online;
+        }
+        return QString::localeAwareCompare(lhs.title, rhs.title) < 0;
+    });
+    for (auto it = group_summaries_.cbegin(); it != group_summaries_.cend(); ++it) {
+        if (!trimmed.isEmpty() && !it->name.contains(trimmed, Qt::CaseInsensitive)) {
+            continue;
+        }
+        const auto& cached_msgs = group_messages_.value(it.key());
+        const bool has_group_msg = !cached_msgs.isEmpty();
+        SidebarEntry entry;
+        entry.key = QStringLiteral("group:%1").arg(it.key());
+        entry.title = it->name;
+        entry.preview = has_group_msg
+            ? formatConversationPreview(cached_msgs.last().content, false)
+            : QStringLiteral("%1 人在线").arg(it->online_count);
+        entry.unread = it->unread_count;
+        entry.type = SidebarItemType::Group;
+        entry.id = it.key();
+        group_entries.append(entry);
+    }
+    std::sort(group_entries.begin(), group_entries.end(), [](const SidebarEntry& lhs, const SidebarEntry& rhs) {
+        if (lhs.unread != rhs.unread) {
+            return lhs.unread > rhs.unread;
+        }
+        return QString::localeAwareCompare(lhs.title, rhs.title) < 0;
+    });
+
+    QList<SidebarEntry> merged_entries;
+    merged_entries.reserve(2 + friend_entries.size() + 1 + group_entries.size());
+    merged_entries.append(entries.at(0));
+    merged_entries.append(entries.at(1));
+    merged_entries.append(entries.at(2));
+    for (const auto& item : friend_entries) {
+        merged_entries.append(item);
+    }
+    SidebarEntry group_section;
+    group_section.type = SidebarItemType::Section;
+    group_section.title = QStringLiteral("群组");
+    group_section.tag = QStringLiteral("%1").arg(group_entries.size());
+    merged_entries.append(group_section);
+
+    SidebarEntry create_group_entry;
+    create_group_entry.key = QStringLiteral("contact:create-group");
+    create_group_entry.title = QStringLiteral("发起群聊");
+    create_group_entry.preview = QStringLiteral("创建新群组并邀请好友加入");
+    create_group_entry.type = SidebarItemType::Action;
+    create_group_entry.tag = QStringLiteral("NEW");
+    merged_entries.append(create_group_entry);
+
+    for (const auto& item : group_entries) {
+        merged_entries.append(item);
+    }
+
+    if (sidebar_widget_) {
+        // 联系人侧栏不自动选中第一项——Action 类型的快捷入口（如"添加好友"）
+        // 被自动选中会立即触发弹窗，导致切换到联系人选项卡时直接阻塞界面。
+        // 仅当已有激活的联系人 / 群组时才恢复对应选中态。
+        sidebar_widget_->populateEntries(merged_entries, current, false);
+    }
+
+    if (!sidebar_widget_ || sidebar_widget_->itemCount() == 0) {
+        showContactEmptyState();
+    }
+
+    updateContactSelectionState();
+    if (!current.isEmpty()
+        && (sidebar_widget_ ? sidebar_widget_->currentKey() : QString()) != current) {
+        applySelectedSidebarItem();
     }
 }
 
@@ -926,53 +1288,170 @@ void MainWindow::updateContactSelectionState() {
     }
 }
 
-void MainWindow::applySelectedFriend() {
+void MainWindow::applySelectedSidebarItem() {
     updateContactSelectionState();
 
-    const QString username = sidebar_widget_ ? sidebar_widget_->currentUsername() : QString();
-    if (username.isEmpty()) {
-        showChatEmptyState();
+    const QString key = sidebar_widget_ ? sidebar_widget_->currentKey() : QString();
+    if (key.isEmpty()) {
+        if (active_main_view_ == MainView::Contact) {
+            showContactEmptyState();
+        } else if (active_main_view_ == MainView::File) {
+            syncFileContextChrome();
+        } else {
+            showChatEmptyState();
+        }
         return;
     }
 
+    if (active_main_view_ == MainView::File) {
+        const SidebarItemType item_type = sidebar_widget_
+            ? sidebar_widget_->currentItemType()
+            : SidebarItemType::FileContext;
+        const QString current_key = sidebar_widget_ ? sidebar_widget_->currentKey() : QString();
+        active_file_context_key_ = current_key;
+        if (item_type == SidebarItemType::Action && current_key == QStringLiteral("file:upload")) {
+            uploadFile();
+            return;
+        }
+        if (current_key == QStringLiteral("file:root")) {
+            navigateToFilePath(QStringLiteral("/"));
+            return;
+        }
+        if (current_key.startsWith(QStringLiteral("path:"))) {
+            navigateToFilePath(current_key.mid(QStringLiteral("path:").size()));
+            return;
+        }
+        if (current_key == QStringLiteral("file:current")) {
+            if (file_panel_widget_) {
+                file_panel_widget_->clearCurrentSelection();
+            }
+            syncFileContextChrome();
+            return;
+        }
+        if (current_key == QStringLiteral("file:search")) {
+            if (file_panel_widget_) {
+                file_panel_widget_->clearCurrentSelection();
+            }
+            syncFileContextChrome();
+            return;
+        }
+        if (current_key == QStringLiteral("file:transfer")) {
+            if (file_panel_widget_) {
+                file_panel_widget_->clearCurrentSelection();
+            }
+            syncFileContextChrome();
+            return;
+        }
+        const bool is_recent_transfer = std::any_of(
+            recent_transfers_.cbegin(),
+            recent_transfers_.cend(),
+            [&current_key](const RecentTransferItem& item) { return item.key == current_key; });
+        if (is_recent_transfer) {
+            if (file_panel_widget_) {
+                file_panel_widget_->clearCurrentSelection();
+            }
+            syncFileContextChrome();
+            return;
+        }
+        syncFileContextChrome();
+        return;
+    }
+
+    const SidebarItemType item_type = sidebar_widget_
+        ? sidebar_widget_->currentItemType()
+        : SidebarItemType::Friend;
     const bool online = sidebar_widget_ ? sidebar_widget_->currentOnline() : false;
-    active_chat_peer_ = username;
-    clearConversationUnread(username);
-    showChatConversation(username, online);
+
+    if (active_main_view_ == MainView::Contact) {
+        if (item_type == SidebarItemType::Action && key == QStringLiteral("contact:new-friend")) {
+            openOnlineUserDialog();
+            return;
+        }
+        if (item_type == SidebarItemType::Action && key == QStringLiteral("contact:create-group")) {
+            openGroupListDialog();
+            return;
+        }
+        if (item_type == SidebarItemType::Action && key.startsWith(QStringLiteral("request:incoming:"))) {
+            showFriendRequestDetails(key.mid(QStringLiteral("request:incoming:").size()), true);
+            return;
+        }
+        if (item_type == SidebarItemType::Action && key.startsWith(QStringLiteral("request:outgoing:"))) {
+            showFriendRequestDetails(key.mid(QStringLiteral("request:outgoing:").size()), false);
+            return;
+        }
+        if (item_type == SidebarItemType::Group) {
+            showGroupDetails(sidebar_widget_ ? sidebar_widget_->currentItemId() : 0);
+        } else {
+            showFriendDetails(key, online);
+        }
+        return;
+    }
+
+    if (item_type == SidebarItemType::Group) {
+        active_chat_peer_.clear();
+        showGroupConversation(sidebar_widget_ ? sidebar_widget_->currentItemId() : 0);
+        return;
+    }
+
+    active_chat_peer_ = key;
+    active_group_id_ = 0;
+    clearConversationUnread(key);
+    showChatConversation(key, online);
     if (chat_panel_widget_) {
         chat_panel_widget_->setConversationStatus(QStringLiteral("正在加载历史消息…"));
     }
-    requestConversationSnapshot(username);
+    requestConversationSnapshot(key);
 }
 
 void MainWindow::sendCurrentMessage() {
-    if (active_chat_peer_.isEmpty()) {
+    if (active_chat_peer_.isEmpty() && active_group_id_ == 0) {
         QMessageBox::warning(this, QStringLiteral("无法发送"),
-                             QStringLiteral("请先选择一个联系人。"));
+                             QStringLiteral("请先选择联系人或群组。"));
         return;
     }
 
-    const QString content = chat_panel_widget_ ? chat_panel_widget_->inputText().trimmed()
-                                               : QString();
+    const bool is_group = active_group_id_ > 0;
+    const QString content = chat_panel_widget_
+        ? chat_panel_widget_->inputText().trimmed()
+        : QString();
     if (content.isEmpty()) {
+        return;
+    }
+
+    const QString now = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz"));
+    if (is_group) {
+        group_service_.sendGroupMessage(active_group_id_, content);
+        cloudvault::ChatMessage local_message{
+            active_group_id_,
+            current_username_,
+            active_group_name_,
+            content,
+            now,
+        };
+        group_messages_[active_group_id_].append(local_message);
+        if (chat_panel_widget_) {
+            chat_panel_widget_->appendMessage(local_message, current_username_);
+            chat_panel_widget_->clearInput();
+            chat_panel_widget_->setConversationStatus(
+                QStringLiteral("%1 人在线").arg(group_summaries_.value(active_group_id_).online_count));
+        }
         return;
     }
 
     chat_service_.sendMessage(active_chat_peer_, content);
     const cloudvault::ChatMessage local_message{
+        0,
         current_username_,
         active_chat_peer_,
         content,
-        QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss.zzz")),
+        now,
     };
     if (chat_panel_widget_) {
         chat_panel_widget_->appendMessage(local_message, current_username_);
-    }
-    applyConversationMessage(local_message, false);
-    if (chat_panel_widget_) {
         chat_panel_widget_->clearInput();
     }
-    showChatConversation(active_chat_peer_, sidebar_widget_ ? sidebar_widget_->currentOnline() : false);
+    applyConversationMessage(local_message, false);
+    showChatConversation(active_chat_peer_, lookupFriendOnline(friends_, active_chat_peer_));
     QTimer::singleShot(120, this, [this, peer = active_chat_peer_] {
         if (!peer.isEmpty() && peer == active_chat_peer_) {
             requestConversationSnapshot(peer);
@@ -1003,14 +1482,6 @@ void MainWindow::refreshFileList(const QString& path,
     }
 
     if (file_panel_widget_) {
-        file_panel_widget_->setPathState(
-            file_search_mode_
-                ? QStringLiteral("搜索：%1").arg(current_file_query_)
-                : current_file_path_,
-            file_search_mode_ ? current_file_query_ : current_file_path_,
-            file_search_mode_ || current_file_path_ != QStringLiteral("/"));
-    }
-    if (file_panel_widget_) {
         file_panel_widget_->setEmptyState(
             file_search_mode_
                 ? QStringLiteral("没有匹配的文件\n修改关键词后回车重新搜索")
@@ -1033,6 +1504,8 @@ void MainWindow::refreshFileList(const QString& path,
     }
 
     updateFileSelectionState();
+    syncFileContextChrome();
+    refreshSidebarForCurrentMode();
 }
 
 void MainWindow::updateFileSelectionState() {
@@ -1053,11 +1526,21 @@ void MainWindow::applySelectedFile() {
     const QString path = file_panel_widget_ ? file_panel_widget_->currentPath() : QString();
     if (path.isEmpty()) {
         resetFileActionSummary();
+        syncFileContextChrome();
         return;
     }
 
     const bool is_dir = file_panel_widget_ ? file_panel_widget_->currentIsDir() : false;
     const QString name = file_panel_widget_ ? file_panel_widget_->currentName() : QString();
+    quint64 file_size = 0;
+    const auto entry_it = std::find_if(current_file_entries_.cbegin(),
+                                       current_file_entries_.cend(),
+                                       [&path](const cloudvault::FileEntry& entry) {
+                                           return entry.path == path;
+                                       });
+    if (entry_it != current_file_entries_.cend()) {
+        file_size = entry_it->size;
+    }
     if (file_panel_widget_) {
         file_panel_widget_->setSelectionSummary(
             name,
@@ -1065,11 +1548,20 @@ void MainWindow::applySelectedFile() {
                    : QStringLiteral("文件"),
             path);
     }
+    if (file_panel_widget_) {
+        file_panel_widget_->setContextSummary(
+            name,
+            is_dir ? QStringLiteral("目录")
+                   : QStringLiteral("文件 · %1").arg(formatFileSize(file_size)));
+    }
 }
 
 void MainWindow::navigateToFilePath(const QString& path) {
     file_search_mode_ = false;
     current_file_query_.clear();
+    active_file_context_key_ = (path.isEmpty() || path == QStringLiteral("/"))
+        ? QStringLiteral("file:root")
+        : QStringLiteral("path:%1").arg(path);
     setFileStatus(QStringLiteral("正在打开 %1 …").arg(path.isEmpty() ? QStringLiteral("/") : path));
     file_service_.listFiles(path.isEmpty() ? QStringLiteral("/") : path);
 }
@@ -1175,10 +1667,12 @@ void MainWindow::runFileSearch() {
     if (keyword.isEmpty()) {
         file_search_mode_ = false;
         current_file_query_.clear();
+        active_file_context_key_ = QStringLiteral("file:current");
         setFileStatus(QStringLiteral("已清空搜索，返回当前目录。"));
         file_service_.listFiles(current_file_path_);
         return;
     }
+    active_file_context_key_ = QStringLiteral("file:search");
     setFileStatus(QStringLiteral("正在搜索“%1”…").arg(keyword));
     file_service_.search(keyword);
 }
@@ -1189,47 +1683,254 @@ void MainWindow::clearFileSearchIfNeeded(const QString& text) {
     }
     file_search_mode_ = false;
     current_file_query_.clear();
+    active_file_context_key_ = QStringLiteral("file:current");
     setFileStatus(QStringLiteral("搜索已清空，返回当前目录。"));
     file_service_.listFiles(current_file_path_);
 }
 
-void MainWindow::switchMainTab(int index) {
-    active_main_tab_ = index;
-    center_stack_->setCurrentIndex(index);
-
-    const bool show_sidebar = (index != 2);
-    const bool show_detail = (index == 0);
-    sidebar_panel_->setVisible(show_sidebar);
-    detail_panel_->setVisible(show_detail);
-
-    if (index == 0) {
-        if (sidebar_widget_) {
-            sidebar_widget_->setHeader(QStringLiteral("消息"),
-                                       QStringLiteral("搜索联系人…"),
-                                       true);
+QList<QPair<QString, QString>> MainWindow::buildFileBreadcrumbs() const {
+    QList<QPair<QString, QString>> crumbs;
+    crumbs.append({QStringLiteral("根目录"), QStringLiteral("/")});
+    if (file_search_mode_) {
+        if (!current_file_query_.trimmed().isEmpty()) {
+            crumbs.append({QStringLiteral("搜索结果"), current_file_path_.isEmpty()
+                ? QStringLiteral("/")
+                : current_file_path_});
         }
-    } else if (index == 1) {
+        return crumbs;
+    }
+
+    const QString normalized = current_file_path_.isEmpty() ? QStringLiteral("/") : current_file_path_;
+    const QStringList segments = normalized.split('/', Qt::SkipEmptyParts);
+    QString cumulative = QStringLiteral("/");
+    for (const QString& segment : segments) {
+        cumulative = (cumulative == QStringLiteral("/"))
+            ? QStringLiteral("/%1").arg(segment)
+            : QStringLiteral("%1/%2").arg(cumulative, segment);
+        crumbs.append({segment, cumulative});
+    }
+    return crumbs;
+}
+
+void MainWindow::syncFileContextChrome() {
+    if (!file_panel_widget_) {
+        return;
+    }
+
+    const QString path_title = file_search_mode_
+        ? QStringLiteral("搜索结果")
+        : (current_file_path_.isEmpty() ? QStringLiteral("/") : current_file_path_);
+    const QString path_meta = file_search_mode_
+        ? (current_file_query_.trimmed().isEmpty()
+               ? QString()
+               : QStringLiteral("关键词：%1").arg(current_file_query_))
+        : QStringLiteral("%1 项").arg(current_file_entries_.size());
+    file_panel_widget_->setContextSummary(path_title, path_meta);
+    file_panel_widget_->setPathState(
+        file_search_mode_
+            ? QStringLiteral("搜索：%1").arg(current_file_query_)
+            : current_file_path_,
+        file_search_mode_ ? current_file_query_ : current_file_path_,
+        file_search_mode_ || current_file_path_ != QStringLiteral("/"));
+    file_panel_widget_->setBreadcrumbs(buildFileBreadcrumbs(),
+                                       current_file_path_.isEmpty() ? QStringLiteral("/") : current_file_path_);
+}
+
+void MainWindow::refreshSidebarForCurrentMode() {
+    if (active_main_view_ == MainView::Profile) {
+        return;
+    }
+    const QString keyword = sidebar_widget_ ? sidebar_widget_->searchText() : QString();
+    if (active_main_view_ == MainView::Contact) {
+        filterContactList(keyword);
+    } else if (active_main_view_ == MainView::File) {
+        QList<SidebarEntry> entries;
+
+        SidebarEntry section;
+        section.type = SidebarItemType::Section;
+        section.title = QStringLiteral("浏览");
+        section.tag = file_search_mode_ ? QStringLiteral("搜索中") : QStringLiteral("目录");
+        entries.append(section);
+
+        SidebarEntry root_dir;
+        root_dir.key = QStringLiteral("file:root");
+        root_dir.title = QStringLiteral("根目录");
+        root_dir.preview = QStringLiteral("/");
+        root_dir.type = SidebarItemType::FileContext;
+        root_dir.tag = current_file_path_ == QStringLiteral("/") ? QStringLiteral("当前") : QString();
+        entries.append(root_dir);
+
+        SidebarEntry current_dir;
+        current_dir.key = QStringLiteral("file:current");
+        current_dir.title = QStringLiteral("当前目录");
+        current_dir.preview = file_search_mode_
+            ? QStringLiteral("搜索结果：%1").arg(current_file_query_)
+            : current_file_path_;
+        current_dir.type = SidebarItemType::FileContext;
+        entries.append(current_dir);
+
+        if (!file_search_mode_) {
+            QString normalized = current_file_path_.isEmpty() ? QStringLiteral("/") : current_file_path_;
+            const QStringList segments = normalized.split('/', Qt::SkipEmptyParts);
+            QString cumulative = QStringLiteral("/");
+            for (const QString& segment : segments) {
+                if (cumulative == QStringLiteral("/")) {
+                    cumulative += segment;
+                } else {
+                    cumulative += QStringLiteral("/") + segment;
+                }
+                SidebarEntry path_item;
+                path_item.key = QStringLiteral("path:%1").arg(cumulative);
+                path_item.title = segment;
+                path_item.preview = cumulative;
+                path_item.type = SidebarItemType::FileContext;
+                path_item.tag = cumulative == current_file_path_ ? QStringLiteral("当前") : QString();
+                entries.append(path_item);
+            }
+        }
+
+        if (file_search_mode_) {
+            SidebarEntry search;
+            search.key = QStringLiteral("file:search");
+            search.title = QStringLiteral("搜索结果");
+            search.preview = current_file_query_.isEmpty()
+                ? QStringLiteral("无关键词")
+                : QStringLiteral("关键词：%1").arg(current_file_query_);
+            search.type = SidebarItemType::FileContext;
+            search.tag = QStringLiteral("%1 项").arg(current_file_entries_.size());
+            entries.append(search);
+        }
+
+        section = {};
+        section.type = SidebarItemType::Section;
+        section.title = QStringLiteral("工具");
+        section.tag = QStringLiteral("快捷操作");
+        entries.append(section);
+
+        SidebarEntry upload;
+        upload.key = QStringLiteral("file:upload");
+        upload.title = QStringLiteral("上传文件");
+        upload.preview = QStringLiteral("选择本地文件加入上传队列");
+        upload.type = SidebarItemType::Action;
+        upload.tag = QStringLiteral("GO");
+        entries.append(upload);
+
+        SidebarEntry transfer;
+        transfer.key = QStringLiteral("file:transfer");
+        transfer.title = QStringLiteral("传输状态");
+        transfer.preview = file_service_.hasActiveTransfer()
+            ? QStringLiteral("有任务正在执行")
+            : QStringLiteral("当前没有活动传输");
+        transfer.type = SidebarItemType::FileContext;
+        transfer.tag = !pending_upload_paths_.isEmpty()
+            ? QStringLiteral("%1").arg(pending_upload_paths_.size())
+            : QString();
+        entries.append(transfer);
+
+        SidebarEntry recent_section;
+        recent_section.type = SidebarItemType::Section;
+        recent_section.title = QStringLiteral("最近传输");
+        recent_section.tag = QStringLiteral("%1").arg(recent_transfers_.size());
+        entries.append(recent_section);
+
+        for (const auto& item : recent_transfers_) {
+            SidebarEntry transfer_item;
+            transfer_item.key = item.key;
+            transfer_item.title = item.title;
+            transfer_item.preview = item.detail;
+            transfer_item.type = SidebarItemType::FileContext;
+            transfer_item.tag = item.tag;
+            entries.append(transfer_item);
+        }
+
         if (sidebar_widget_) {
-            sidebar_widget_->setHeader(QStringLiteral("文件"),
-                                       QStringLiteral("搜索联系人…"),
-                                       false);
+            QString selected_key = active_file_context_key_;
+            if (selected_key.isEmpty()) {
+                selected_key = file_search_mode_
+                    ? QStringLiteral("file:search")
+                    : QStringLiteral("file:current");
+            }
+            sidebar_widget_->populateEntries(entries, selected_key, true);
         }
     } else {
+        filterFriendList(keyword);
+    }
+}
+
+void MainWindow::switchMainTab(int index) {
+    active_main_view_ = static_cast<MainView>(index);
+
+    const bool show_sidebar = (active_main_view_ != MainView::Profile);
+    sidebar_panel_->setVisible(show_sidebar);
+
+    if (active_main_view_ == MainView::Message) {
+        center_stack_->setCurrentWidget(chat_panel_widget_);
+        if (sidebar_widget_) {
+            sidebar_widget_->setMode(SidebarMode::Message);
+            sidebar_widget_->setHeader(QStringLiteral("消息"),
+                                       QStringLiteral("搜索会话…"),
+                                       true);
+        }
+        content_splitter_->setSizes({260, std::max(520, width() - 312)});
+        if (active_chat_peer_.isEmpty() && active_group_id_ == 0) {
+            showChatEmptyState();
+        }
+    } else if (active_main_view_ == MainView::Contact) {
+        center_stack_->setCurrentWidget(contact_panel_widget_);
+        if (sidebar_widget_) {
+            sidebar_widget_->setMode(SidebarMode::Contact);
+            sidebar_widget_->setHeader(QStringLiteral("联系人"),
+                                       QStringLiteral("搜索好友或群组…"),
+                                       true);
+        }
+        content_splitter_->setSizes({260, std::max(560, width() - 312)});
+        if (active_contact_friend_.isEmpty() && active_contact_group_id_ == 0) {
+            showContactEmptyState();
+        }
+    } else if (active_main_view_ == MainView::File) {
+        center_stack_->setCurrentWidget(file_panel_widget_);
+        if (sidebar_widget_) {
+            sidebar_widget_->setMode(SidebarMode::File);
+            sidebar_widget_->setHeader(QStringLiteral("文件"),
+                                       QStringLiteral("搜索文件模式上下文…"),
+                                       false);
+        }
+        content_splitter_->setSizes({260, std::max(560, width() - 312)});
+        syncFileContextChrome();
+    } else {
+        center_stack_->setCurrentWidget(profile_panel_widget_);
         if (sidebar_widget_) {
             sidebar_widget_->setHeader(QStringLiteral("我"),
-                                       QStringLiteral("搜索联系人…"),
+                                       QStringLiteral(""),
                                        false);
         }
     }
     refreshIconBarActiveState();
+    refreshSidebarForCurrentMode();
 
-    if (index == 0) {
-        content_splitter_->setSizes({240, std::max(400, width() - 512), 220});
-    } else if (index == 1) {
-        content_splitter_->setSizes({240, std::max(500, width() - 292), 0});
-    } else {
-        content_splitter_->setSizes({0, width(), 0});
+    if (active_main_view_ == MainView::Profile) {
+        content_splitter_->setSizes({0, width()});
     }
+}
+
+void MainWindow::navigateToChatWithFriend(const QString& username) {
+    if (username.isEmpty()) {
+        return;
+    }
+    switchMainTab(static_cast<int>(MainView::Message));
+    active_chat_peer_ = username;
+    refreshSidebarForCurrentMode();
+    showChatConversation(username, lookupFriendOnline(friends_, username));
+    requestConversationSnapshot(username);
+}
+
+void MainWindow::navigateToChatWithGroup(int group_id) {
+    if (group_id <= 0) {
+        return;
+    }
+    switchMainTab(static_cast<int>(MainView::Message));
+    showGroupConversation(group_id);
+    refreshSidebarForCurrentMode();
 }
 
 void MainWindow::openOnlineUserDialog() {
@@ -1248,15 +1949,28 @@ void MainWindow::openOnlineUserDialog() {
 }
 
 void MainWindow::openGroupListDialog() {
-    const QList<GroupListEntry> groups;
+    QList<GroupListEntry> groups;
+    for (auto it = group_summaries_.cbegin(); it != group_summaries_.cend(); ++it) {
+        GroupListEntry entry;
+        entry.group_id = it.key();
+        entry.name = it->name;
+        entry.owner_id = it->owner_id;
+        entry.online_count = it->online_count;
+        entry.unread_count = it->unread_count;
+        groups.append(entry);
+    }
     GroupListDialog dialog(groups, this);
-    connect(&dialog, &GroupListDialog::groupChosen, this, [this](const QString& group_name) {
+    connect(&group_service_, &cloudvault::GroupService::groupListReceived,
+            &dialog, &GroupListDialog::setGroups);
+    connect(&dialog, &GroupListDialog::groupChosen, this, [this](int group_id) {
         active_chat_peer_.clear();
-        active_group_name_ = group_name;
-        if (chat_panel_widget_) {
-            chat_panel_widget_->showGroupPlaceholder(group_name);
-        }
+        showGroupConversation(group_id);
     });
+    connect(&dialog, &GroupListDialog::createRequested,
+            this, [this](const QString& name) { group_service_.createGroup(name); });
+    connect(&dialog, &GroupListDialog::leaveRequested,
+            this, [this](int group_id) { group_service_.leaveGroup(group_id); });
+    group_service_.getGroupList();
     dialog.exec();
 }
 
@@ -1357,23 +2071,49 @@ void MainWindow::hideTransferRow() {
     }
 }
 
-void MainWindow::appendEventLog(const QString& message, const QString& icon) {
-    Q_UNUSED(message);
-    Q_UNUSED(icon);
-}
-
 void MainWindow::refreshIconBarActiveState() {
     if (!message_tab_btn_ || !contact_tab_btn_ || !file_tab_btn_ || !avatar_tab_btn_) {
         return;
     }
-    message_tab_btn_->setProperty("active", active_main_tab_ == 0);
-    contact_tab_btn_->setProperty("active", false);
-    file_tab_btn_->setProperty("active", active_main_tab_ == 1);
-    avatar_tab_btn_->setProperty("active", active_main_tab_ == 2);
+    message_tab_btn_->setProperty("active", active_main_view_ == MainView::Message);
+    contact_tab_btn_->setProperty("active", active_main_view_ == MainView::Contact);
+    file_tab_btn_->setProperty("active", active_main_view_ == MainView::File);
+    avatar_tab_btn_->setProperty("active", active_main_view_ == MainView::Profile);
     repolish(message_tab_btn_);
     repolish(contact_tab_btn_);
     repolish(file_tab_btn_);
     repolish(avatar_tab_btn_);
+}
+
+void MainWindow::upsertRecentTransfer(const QString& key,
+                                      const QString& title,
+                                      const QString& detail,
+                                      const QString& tag) {
+    if (key.isEmpty()) {
+        return;
+    }
+    auto it = std::find_if(recent_transfers_.begin(),
+                           recent_transfers_.end(),
+                           [&key](const RecentTransferItem& item) { return item.key == key; });
+    if (it != recent_transfers_.end()) {
+        it->title = title;
+        it->detail = detail;
+        it->tag = tag;
+        const RecentTransferItem updated = *it;
+        recent_transfers_.erase(it);
+        recent_transfers_.prepend(updated);
+    } else {
+        recent_transfers_.prepend({key, title, detail, tag});
+    }
+    while (recent_transfers_.size() > 5) {
+        recent_transfers_.removeLast();
+    }
+    if (active_main_view_ == MainView::File) {
+        refreshSidebarForCurrentMode();
+        if (active_file_context_key_ == key && (!file_panel_widget_ || !file_panel_widget_->hasSelection())) {
+            syncFileContextChrome();
+        }
+    }
 }
 
 void MainWindow::showConnectionBanner(const QString& message) {
@@ -1419,4 +2159,54 @@ void MainWindow::saveProfileDraft() {
     if (profile_panel_widget_) {
         profile_panel_widget_->setDisplayName(nickname.isEmpty() ? current_username_ : nickname);
     }
+    auth_service_.updateProfile(nickname, signature);
+}
+
+void MainWindow::refreshGroupList(const QList<GroupListEntry>& groups) {
+    QHash<int, int> unread_snapshot;
+    for (auto it = group_summaries_.cbegin(); it != group_summaries_.cend(); ++it) {
+        unread_snapshot.insert(it.key(), it->unread_count);
+    }
+
+    group_summaries_.clear();
+    for (const auto& group : groups) {
+        GroupSummary summary;
+        summary.name = group.name;
+        summary.owner_id = group.owner_id;
+        summary.online_count = group.online_count;
+        summary.unread_count = unread_snapshot.value(group.group_id, 0);
+        group_summaries_.insert(group.group_id, summary);
+    }
+
+    if (active_group_id_ > 0 && !group_summaries_.contains(active_group_id_)) {
+        showChatEmptyState();
+    } else if (active_group_id_ > 0) {
+        showGroupConversation(active_group_id_);
+    }
+    if (active_contact_group_id_ > 0 && !group_summaries_.contains(active_contact_group_id_)) {
+        showContactEmptyState();
+    } else if (active_contact_group_id_ > 0) {
+        showGroupDetails(active_contact_group_id_);
+    }
+    refreshSidebarForCurrentMode();
+}
+
+void MainWindow::showGroupConversation(int group_id) {
+    const auto it = group_summaries_.find(group_id);
+    if (it == group_summaries_.end()) {
+        return;
+    }
+
+    active_chat_peer_.clear();
+    active_group_id_ = group_id;
+    active_group_name_ = it->name;
+    it->unread_count = 0;
+    if (chat_panel_widget_) {
+        chat_panel_widget_->showConversation(it->name,
+                                             QStringLiteral("%1 人在线").arg(it->online_count),
+                                             true);
+        chat_panel_widget_->rebuildMessages(group_messages_.value(group_id), current_username_);
+    }
+    chat_service_.loadGroupHistory(group_id);
+    refreshSidebarForCurrentMode();
 }

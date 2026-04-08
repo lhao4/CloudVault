@@ -4,25 +4,22 @@
 // =============================================================
 
 #include "group_list_dialog.h"
+#include "ui/widget_helpers.h"
 
 #include <QFrame>
 #include <QGraphicsDropShadowEffect>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QLabel>
 #include <QListWidget>
 #include <QListWidgetItem>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QVBoxLayout>
 
-namespace {
+using namespace cv_ui;
 
-void applyShadow(QWidget* widget) {
-    auto* effect = new QGraphicsDropShadowEffect(widget);
-    effect->setBlurRadius(40);
-    effect->setOffset(0, 8);
-    effect->setColor(QColor(17, 24, 39, 30));
-    widget->setGraphicsEffect(effect);
-}
+namespace {
 
 QWidget* createGroupRow(const GroupListEntry& group, QWidget* parent = nullptr) {
     auto* row = new QWidget(parent);
@@ -164,14 +161,36 @@ void GroupListDialog::connectSignals() {
                 if (!item) {
                     return;
                 }
-                emit groupChosen(item->data(Qt::UserRole).toString());
+                emit groupChosen(item->data(Qt::UserRole).toInt());
                 accept();
             });
 
     connect(enter_btn_, &QPushButton::clicked, this, [this] {
         if (auto* item = group_list_->currentItem()) {
-            emit groupChosen(item->data(Qt::UserRole).toString());
+            emit groupChosen(item->data(Qt::UserRole).toInt());
             accept();
+        }
+    });
+
+    connect(create_btn_, &QPushButton::clicked, this, [this] {
+        const QString name = QInputDialog::getText(this,
+                                                   QStringLiteral("创建群组"),
+                                                   QStringLiteral("请输入群名称：")).trimmed();
+        if (!name.isEmpty()) {
+            emit createRequested(name);
+        }
+    });
+
+    connect(leave_btn_, &QPushButton::clicked, this, [this] {
+        auto* item = group_list_->currentItem();
+        if (!item) {
+            return;
+        }
+        if (QMessageBox::question(this,
+                                  QStringLiteral("退出群组"),
+                                  QStringLiteral("确认退出当前群组吗？"),
+                                  QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
+            emit leaveRequested(item->data(Qt::UserRole).toInt());
         }
     });
 }
@@ -181,7 +200,7 @@ void GroupListDialog::populateList() {
 
     for (const auto& group : groups_) {
         auto* item = new QListWidgetItem(group_list_);
-        item->setData(Qt::UserRole, group.name);
+        item->setData(Qt::UserRole, group.group_id);
         item->setSizeHint(QSize(0, 48));
         group_list_->setItemWidget(item, createGroupRow(group, group_list_));
     }
@@ -189,4 +208,10 @@ void GroupListDialog::populateList() {
     const bool has_groups = !groups_.isEmpty();
     group_list_->setVisible(has_groups);
     empty_state_label_->setVisible(!has_groups);
+    create_btn_->setEnabled(true);
+}
+
+void GroupListDialog::setGroups(const QList<GroupListEntry>& groups) {
+    groups_ = groups;
+    populateList();
 }

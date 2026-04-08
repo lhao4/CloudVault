@@ -10,7 +10,9 @@
 #include <QString>
 
 struct GroupListEntry {
+    int group_id = 0;
     QString name;
+    int owner_id = 0;
     int online_count = 0;
     int unread_count = 0;
 };
@@ -25,9 +27,12 @@ class GroupListDialog : public QDialog {
 public:
     explicit GroupListDialog(const QList<GroupListEntry>& groups,
                              QWidget* parent = nullptr);
+    void setGroups(const QList<GroupListEntry>& groups);
 
 signals:
-    void groupChosen(const QString& group_name);
+    void groupChosen(int group_id);
+    void createRequested(const QString& group_name);
+    void leaveRequested(int group_id);
 
 private:
     void setupUi();
@@ -41,3 +46,5 @@ private:
     QPushButton* leave_btn_ = nullptr;
     QPushButton* create_btn_ = nullptr;
 };
+
+Q_DECLARE_METATYPE(GroupListEntry)

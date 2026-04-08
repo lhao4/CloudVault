@@ -5,9 +5,11 @@
 
 #pragma once
 
+#include "service/auth_service.h"
 #include "service/chat_service.h"
 #include "service/friend_service.h"
 #include "service/file_service.h"
+#include "service/group_service.h"
 #include "service/share_service.h"
 
 #include <QDateTime>
@@ -29,15 +31,15 @@ class QSplitter;
 class QVBoxLayout;
 class QStackedWidget;
 class ChatPanel;
+class ContactPanel;
 class FilePanel;
-class DetailPanel;
 class SidebarPanel;
 class ProfilePanel;
 
 /**
  * @brief 客户端主窗口。
  *
- * 负责组织 QQ 风格四栏壳层布局（图标栏 + 联系人栏 + 中央内容 + 详情栏），
+ * 负责组织桌面 IM 风格三段式壳层布局（图标栏 + 上下文侧栏 + 中央主区），
  * 协调聊天、好友、文件、分享、个人信息等业务服务，并维护页面级状态。
  */
 class MainWindow : public QMainWindow {
@@ -54,6 +56,8 @@ public:
      * @param parent Qt 父对象。
      */
     MainWindow(const QString& username,
+               cloudvault::AuthService& auth_service,
+               cloudvault::GroupService& group_service,
                cloudvault::ChatService& chat_service,
                cloudvault::FriendService& friend_service,
                cloudvault::FileService& file_service,
@@ -64,13 +68,6 @@ public:
      * @brief 析构主窗口。
      */
     ~MainWindow() override;
-
-    /**
-     * @brief 追加事件日志（当前已保留为空实现用于兼容旧调用点）。
-     * @param message 日志内容。
-     * @param icon 日志图标文本。
-     */
-    void appendEventLog(const QString& message, const QString& icon = QStringLiteral("●"));
 
     /**
      * @brief 显示顶部连接状态横幅。
@@ -111,6 +108,20 @@ private:
         bool has_message = false;
         /// @brief 最新消息是否由当前用户发送。
         bool last_message_outgoing = false;
+    };
+
+    struct GroupSummary {
+        QString name;
+        int owner_id = 0;
+        int online_count = 0;
+        int unread_count = 0;
+    };
+
+    enum class MainView {
+        Message = 0,
+        Contact = 1,
+        File = 2,
+        Profile = 3,
     };
 
     /**
@@ -178,20 +189,25 @@ private:
      * @brief 刷新好友缓存并触发侧栏重绘。
      * @param friends 好友列表（用户名 + 在线状态）。
      */
-    void refreshFriendList(const QList<QPair<QString, bool>>& friends);
+    void refreshFriendList(const QList<cloudvault::FriendProfile>& friends);
     /**
-     * @brief 按关键词过滤并重建联系人列表。
+     * @brief 按关键词过滤并重建消息视图侧栏列表。
      * @param keyword 搜索关键词。
      */
     void filterFriendList(const QString& keyword);
+    void filterContactList(const QString& keyword);
+    void refreshSidebarForCurrentMode();
+    void applySelectedSidebarItem();
+    void showContactEmptyState();
+    void showFriendDetails(const QString& username, bool online);
+    void showFriendRequestDetails(const QString& username, bool incoming);
+    void showGroupDetails(int group_id);
+    void navigateToChatWithFriend(const QString& username);
+    void navigateToChatWithGroup(int group_id);
     /**
-     * @brief 刷新联系人列表选中高亮。
+     * @brief 刷新侧栏选中高亮。
      */
     void updateContactSelectionState();
-    /**
-     * @brief 应用当前选中的联系人并加载聊天内容。
-     */
-    void applySelectedFriend();
     /**
      * @brief 发送当前输入框消息。
      */
@@ -226,6 +242,15 @@ private:
      */
     void navigateToFilePath(const QString& path);
     /**
+     * @brief 根据当前文件上下文刷新顶部路径栏和主区摘要。
+     */
+    void syncFileContextChrome();
+    /**
+     * @brief 构建当前目录对应的面包屑。
+     * @return 路径段列表。
+     */
+    QList<QPair<QString, QString>> buildFileBreadcrumbs() const;
+    /**
      * @brief 打开当前目录的父目录。
      */
     void openCurrentParentDirectory();
@@ -256,11 +281,11 @@ private:
     void clearFileSearchIfNeeded(const QString& text);
     /**
      * @brief 切换主内容页签。
-     * @param index 页面索引（0=消息，1=文件，2=我）。
+     * @param index 页面索引（0=消息，1=联系人，2=文件，3=我）。
      */
     void switchMainTab(int index);
     /**
-     * @brief 打开在线用户弹窗。
+     * @brief 打开添加好友入口弹窗。
      */
     void openOnlineUserDialog();
     /**
@@ -307,13 +332,23 @@ private:
      * @brief 保存个人资料草稿到本地配置。
      */
     void saveProfileDraft();
+    void refreshGroupList(const QList<GroupListEntry>& groups);
+    void showGroupConversation(int group_id);
     /**
      * @brief 刷新左侧图标栏激活态样式。
      */
     void refreshIconBarActiveState();
+    void upsertRecentTransfer(const QString& key,
+                              const QString& title,
+                              const QString& detail,
+                              const QString& tag = QString());
 
     /// @brief 当前登录用户名。
     QString current_username_;
+    /// @brief 认证服务引用。
+    cloudvault::AuthService&   auth_service_;
+    /// @brief 群组服务引用。
+    cloudvault::GroupService&  group_service_;
     /// @brief 聊天服务引用。
     cloudvault::ChatService&   chat_service_;
     /// @brief 好友服务引用。
@@ -323,9 +358,13 @@ private:
     /// @brief 分享服务引用。
     cloudvault::ShareService&  share_service_;
     /// @brief 当前好友缓存。
-    QList<QPair<QString, bool>> friends_;
+    QList<cloudvault::FriendProfile> friends_;
     /// @brief 各联系人会话摘要缓存。
     QHash<QString, ConversationSummary> conversation_summaries_;
+    /// @brief 群组摘要缓存。
+    QHash<int, GroupSummary> group_summaries_;
+    /// @brief 群聊消息缓存。
+    QHash<int, QList<cloudvault::ChatMessage>> group_messages_;
     /// @brief 正在请求历史消息的联系人集合（防重入）。
     QSet<QString> pending_history_requests_;
     /// @brief 当前文件列表缓存。
@@ -338,17 +377,34 @@ private:
     QString current_file_query_;
     /// @brief 是否处于文件搜索模式。
     bool file_search_mode_ = false;
-    /// @brief 当前激活群组名（仅 UI 占位流程）。
+    /// @brief 当前文件页上下文锚点。
+    QString active_file_context_key_ = QStringLiteral("file:current");
+    /// @brief 当前激活群组名。
     QString active_group_name_;
+    /// @brief 当前激活群组 ID。
+    int active_group_id_ = 0;
+    /// @brief 当前联系人视图选中好友。
+    QString active_contact_friend_;
+    /// @brief 当前联系人视图选中群组 ID。
+    int active_contact_group_id_ = 0;
+    /// @brief 收到的好友申请列表。
+    QStringList incoming_friend_requests_;
+    /// @brief 已发送的好友申请列表。
+    QStringList outgoing_friend_requests_;
+    struct RecentTransferItem {
+        QString key;
+        QString title;
+        QString detail;
+        QString tag;
+    };
+    QList<RecentTransferItem> recent_transfers_;
 
     /// @brief 主内容根容器。
     QWidget* content_root_ = nullptr;
-    /// @brief 三栏分割器（联系人 / 中央内容 / 详情）。
+    /// @brief 主分割器（侧栏 / 中央内容）。
     QSplitter* content_splitter_ = nullptr;
-    /// @brief 左侧联系人栏容器。
+    /// @brief 左侧上下文侧栏容器。
     QFrame* sidebar_panel_ = nullptr;
-    /// @brief 右侧详情栏容器。
-    QWidget* detail_panel_ = nullptr;
     /// @brief 顶部连接状态横幅。
     QFrame* connection_banner_ = nullptr;
     /// @brief 连接状态横幅文本。
@@ -359,25 +415,25 @@ private:
     QPushButton* avatar_tab_btn_ = nullptr;
     /// @brief 消息页按钮。
     QPushButton* message_tab_btn_ = nullptr;
-    /// @brief 联系人按钮（打开在线用户弹窗）。
+    /// @brief 联系人按钮（打开联系人主视图）。
     QPushButton* contact_tab_btn_ = nullptr;
     /// @brief 文件页按钮。
     QPushButton* file_tab_btn_ = nullptr;
-    /// @brief 设置按钮（占位）。
+    /// @brief 设置按钮（轻量占位）。
     QPushButton* settings_tab_btn_ = nullptr;
-    /// @brief 当前主标签索引。
-    int active_main_tab_ = 0;
+    /// @brief 当前主视图。
+    MainView active_main_view_ = MainView::Message;
 
-    /// @brief 中央页面堆栈（聊天 / 文件 / 我）。
+    /// @brief 中央页面堆栈（聊天 / 联系人 / 文件 / 我）。
     QStackedWidget* center_stack_ = nullptr;
-    /// @brief 左侧联系人面板。
+    /// @brief 左侧上下文侧栏面板。
     SidebarPanel* sidebar_widget_ = nullptr;
     /// @brief 聊天面板。
     ChatPanel* chat_panel_widget_ = nullptr;
+    /// @brief 联系人主区面板。
+    ContactPanel* contact_panel_widget_ = nullptr;
     /// @brief 文件面板。
     FilePanel* file_panel_widget_ = nullptr;
-    /// @brief 右侧详情面板。
-    DetailPanel* detail_panel_widget_ = nullptr;
     /// @brief 个人资料面板。
     ProfilePanel* profile_panel_widget_ = nullptr;
     /// @brief 等待上传的本地文件队列。
