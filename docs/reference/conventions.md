@@ -75,10 +75,10 @@ CloudVault/
 ├── client/                         # 客户端（Windows，Qt 6）
 │   ├── CMakeLists.txt
 │   ├── resources/
-│   │   ├── images.qrc
-│   │   └── images/
-│   │       ├── file.png
-│   │       └── folder.png
+│   │   ├── resources.qrc
+│   │   ├── icons/
+│   │   └── styles/
+│   │       └── style.qss
 │   └── src/
 │       ├── main.cpp
 │       ├── app.h
@@ -102,6 +102,7 @@ CloudVault/
 │       │   ├── share_service.h
 │       │   └── share_service.cpp
 │       └── ui/
+│           ├── widget_helpers.h
 │           ├── login_window.h
 │           ├── login_window.cpp
 │           ├── main_window.h
@@ -110,8 +111,8 @@ CloudVault/
 │           ├── chat_panel.cpp
 │           ├── file_panel.h
 │           ├── file_panel.cpp
-│           ├── detail_panel.h
-│           ├── detail_panel.cpp
+│           ├── contact_panel.h
+│           ├── contact_panel.cpp
 │           ├── sidebar_panel.h
 │           ├── sidebar_panel.cpp
 │           ├── profile_panel.h

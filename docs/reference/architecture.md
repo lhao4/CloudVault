@@ -25,9 +25,9 @@ CloudVault 当前采用经典 C/S 架构：
 │   LoginWindow               AuthService       TcpClient      │
 │   MainWindow                FriendService     ResponseRouter │
 │   SidebarPanel              ChatService                         │
-│   ChatPanel                 FileService                         │
-│   FilePanel                 ShareService                        │
-│   DetailPanel                                                │
+│   ChatPanel                 GroupService                        │
+│   FilePanel                 FileService                         │
+│   ContactPanel              ShareService                        │
 │   ProfilePanel / Dialogs                                      │
 └──────────────────────────────┬──────────────────────────────┘
                                │
@@ -46,6 +46,7 @@ CloudVault 当前采用经典 C/S 架构：
 │        ├── AuthHandler                                      │
 │        ├── FriendHandler                                    │
 │        ├── ChatHandler                                      │
+│        ├── GroupHandler                                     │
 │        ├── FileHandler                                      │
 │        └── ShareHandler                                     │
 │                 │                                           │
@@ -85,11 +86,13 @@ CloudVault/
 │   │   │   ├── database.h
 │   │   │   ├── user_repository.h
 │   │   │   ├── friend_repository.h
-│   │   │   └── chat_repository.h
+│   │   │   ├── chat_repository.h
+│   │   │   └── group_repository.h
 │   │   └── handler/
 │   │       ├── auth_handler.h
 │   │       ├── friend_handler.h
 │   │       ├── chat_handler.h
+│   │       ├── group_handler.h
 │   │       ├── file_handler.h
 │   │       └── share_handler.h
 │   ├── src/
@@ -112,6 +115,7 @@ CloudVault/
 │       │   ├── auth_service.*
 │       │   ├── friend_service.*
 │       │   ├── chat_service.*
+│       │   ├── group_service.*
 │       │   ├── file_service.*
 │       │   └── share_service.*
 │       └── ui/
@@ -120,8 +124,9 @@ CloudVault/
 │           ├── sidebar_panel.*
 │           ├── chat_panel.*
 │           ├── file_panel.*
-│           ├── detail_panel.*
+│           ├── contact_panel.*
 │           ├── profile_panel.*
+│           ├── widget_helpers.h
 │           ├── online_user_dialog.*
 │           ├── share_file_dialog.*
 │           └── group_list_dialog.*
@@ -270,7 +275,6 @@ EventLoop 可写事件发送
 
 - TLS 传输层
 - 更完整的服务端业务测试覆盖
-- 群聊后端链路
 
 ---
 
@@ -284,13 +288,14 @@ EventLoop 可写事件发送
 UI 层
   ├── LoginWindow
   ├── MainWindow
-  ├── SidebarPanel / ChatPanel / FilePanel / DetailPanel / ProfilePanel
+  ├── SidebarPanel / ChatPanel / FilePanel / ContactPanel / ProfilePanel
   └── OnlineUserDialog / ShareFileDialog / GroupListDialog
 
 Service 层
   ├── AuthService
   ├── FriendService
   ├── ChatService
+  ├── GroupService
   ├── FileService
   └── ShareService
 
@@ -341,9 +346,9 @@ Network 层
 | 面板 | 当前职责 |
 |------|----------|
 | `SidebarPanel` | 左侧栏标题、搜索、联系人列表、选择态 |
-| `ChatPanel` | 聊天中栏、消息列表绘制、空态、群聊占位、输入框与发送动作 |
+| `ChatPanel` | 聊天中栏、消息列表绘制、空态、私聊与群聊统一布局、输入框与发送动作 |
 | `FilePanel` | 文件中栏、路径栏、搜索、文件列表、底部操作栏、传输进度 |
-| `DetailPanel` | 右侧联系人详情和共享文件摘要 |
+| `ContactPanel` | 右侧联系人/群组详情与操作入口 |
 | `ProfilePanel` | “我”页个人信息卡片、保存/取消/退出登录 |
 
 ### 5.6 客户端流程
@@ -387,7 +392,6 @@ MainWindow 触发刷新好友列表
 
 占位或未完成：
 
-- 群聊消息流仅有界面占位，暂无完整业务链路
 - 客户端自动化测试尚未接入
 
 ---
@@ -398,8 +402,11 @@ MainWindow 触发刷新好友列表
 
 - 无 TLS
 - 客户端已有 `App`
-- `service/` 已从 `network/` 中拆出
+- `service/` 已从 `network/` 中拆出，包含 `GroupService`
 - 主界面已拆分为多个 Panel，而不是把所有 UI 塞进 `MainWindow`
+- 聊天面板统一为 `ChatPanel`（单/群聊共用布局）
+- 右侧详情面板为 `ContactPanel`，旧版 `DetailPanel` 已删除
+- 共用 UI 工具函数收敛于 `widget_helpers.h`
 - “我”页当前是 `ProfilePanel`，不是 `ProfileDialog`
 - `MessageDispatcher` 位于 `server/include/server/message_dispatcher.h`
 - 服务端配置解析位于 `ServerApp`，不是独立 `Config` 类
@@ -410,8 +417,7 @@ MainWindow 触发刷新好友列表
 
 如果下一阶段继续向更完整工程化靠拢，建议优先做：
 
-1. 群聊协议与后端实现
-2. 客户端昵称字段真正入协议、入库
-3. 为服务端 Handler 引入更可测试的注入 seam
-4. 增加 Linux 服务端 CI 构建与测试
-5. 如有安全要求，再补 TLS 传输层
+1. 客户端昵称字段真正入协议、入库
+2. 为服务端 Handler 引入更可测试的注入 seam
+3. 增加 Linux 服务端 CI 构建与测试
+4. 如有安全要求，再补 TLS 传输层

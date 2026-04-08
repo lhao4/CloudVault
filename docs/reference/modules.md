@@ -308,13 +308,14 @@ MainWindow(const QString& username,
 
 - `MainWindow`
 - `SidebarPanel`
-- `ChatPanel`
+- `ChatPanel`（私聊与群聊统一布局）
 - `FilePanel`
-- `DetailPanel`
+- `ContactPanel`（右侧联系人/群组详情）
 - `ProfilePanel`
 - `GroupListDialog`
 - `OnlineUserDialog`
 - `ShareFileDialog`
+- `widget_helpers.h`（共用 UI 工具函数）
 
 状态特征：
 
@@ -322,7 +323,7 @@ MainWindow(const QString& username,
 - 资料页保存会同步到服务端
 - 群组列表已可创建、进入、退出群组
 - 群聊实时消息已接入
-- 群聊历史仍依赖后续独立协议补齐
+- 群聊历史仓储层已实现，对外独立协议暂未定义
 
 ---
 

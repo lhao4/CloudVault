@@ -82,8 +82,6 @@ enum class MessageType : uint32_t {
     DELETE_FRIEND_REQUEST    = 0x020B,
     DELETE_FRIEND_RESPONSE   = 0x020C,
     FRIEND_DELETED_PUSH      = 0x020D,
-    ONLINE_USER_REQUEST      = 0x020E,
-    ONLINE_USER_RESPONSE     = 0x020F,
 
     CHAT                     = 0x0301,
     GROUP_CHAT               = 0x0302,
@@ -119,8 +117,7 @@ enum class MessageType : uint32_t {
 
 说明：
 
-- `CHAT`、`GROUP_CHAT`、`GET_HISTORY` 采用“请求和推送/响应复用同一类型”的模式。
-- `ONLINE_USER_*` 已保留在协议头文件中，但当前服务端尚未注册实现。
+- `CHAT`、`GROUP_CHAT`、`GET_HISTORY` 采用”请求和推送/响应复用同一类型”的模式。
 
 ---
 
@@ -441,7 +438,6 @@ string created_at
 | 个人资料同步 | 已实现 |
 | 查找用户 | 已实现 |
 | 好友申请、同意、删除、刷新列表 | 已实现 |
-| 在线用户列表 | 仅保留枚举，未注册实现 |
 | 私聊消息与离线投递 | 已实现 |
 | 私聊历史查询 | 已实现 |
 | 群组创建、加入、退出、列表 | 已实现 |
